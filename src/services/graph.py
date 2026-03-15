@@ -198,6 +198,22 @@ async def run_community_detection(tenant_id: str) -> dict:
     return {"communities_created": communities_created}
 
 
+async def update_trust(agent_a_id: str, agent_b_id: str, trust_delta: float) -> None:
+    """Update trust on KNOWS edge. Clamp to 0-1. Append to trust_history."""
+    await neo4j_client.execute_write(
+        """MATCH (a:Agent {id: $aid})-[r:KNOWS]-(b:Agent {id: $bid})
+        SET r.trust = CASE
+            WHEN r.trust + $delta > 1.0 THEN 1.0
+            WHEN r.trust + $delta < 0.0 THEN 0.0
+            ELSE r.trust + $delta
+        END,
+        r.trust_history = r.trust_history[-9..] + [r.trust + $delta]""",
+        aid=agent_a_id,
+        bid=agent_b_id,
+        delta=trust_delta,
+    )
+
+
 async def multi_hop_query(start_entity: str, max_hops: int = 3) -> list[dict]:
     """Traverse typed relations from an entity."""
     records = await neo4j_client.execute_read(

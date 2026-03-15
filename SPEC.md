@@ -7,12 +7,29 @@ NexusMind is a living collective intelligence platform. Your AI agent — carryi
 
 ### 2.1 Agent (Agentic Layer)
 An AI entity representing a real user. Properties:
-- **Personality:** Big Five traits (O, C, E, A, N) scored 0.0–1.0
+- **Base Personality:** Big Five traits (O, C, E, A, N) scored 0.0-1.0. Fixed at onboarding, refined nightly via fine-tuning. This is WHO the agent is.
+- **Effective Personality:** Base traits modulated by trust level per relationship. `effective_trait = base_trait * trust_modifier(trust)` where `trust_modifier` maps trust (0.0-1.0) to expression intensity (0.3-1.0). This is HOW the agent BEHAVES with a specific person.
 - **Interests:** Topic list (e.g., ["sustainability", "AI", "finance"])
 - **Communication style:** analytical / expressive / driver / amiable (derived from Big Five)
 - **Memory:** 3-tier (hot vectors + knowledge graph + cold archive)
 - **LoRA adapter:** Personality archetype (6 archetypes, hourly micro-updates + nightly full training)
 - **Work mode:** EXPLORE / RESEARCH / REFINE (always active in background)
+
+**Trust-Adaptive Expression Table:**
+
+| Trust Level | Label | trust_modifier | Behavior |
+|-------------|-------|---------------|----------|
+| 0.0 - 0.25 | Stranger | 0.3 | Guarded, formal, shares only surface-level opinions. Low openness expression regardless of base trait. |
+| 0.25 - 0.50 | Acquaintance | 0.5 | Moderately expressive. Willing to probe and question. Shares professional context. |
+| 0.50 - 0.75 | Colleague | 0.75 | Open and direct. Comfortable challenging assumptions. References shared history. |
+| 0.75 - 1.0 | Trusted | 1.0 | Full personality expression. Vulnerable, honest disagreements. Deep memory sharing. |
+
+**Trust Evolution Rules:**
+- Positive conversation (quality_score > 0.6): trust += 0.05
+- Neutral conversation (quality_score 0.3-0.6): trust += 0.03
+- Low-quality conversation (quality_score 0.1-0.3): trust += 0.02
+- Negative signal (contradiction without resolution, permission violation): trust -= 0.10
+- Trust is clamped to [0.0, 1.0] and stored on the KNOWS edge per relationship
 
 ### 2.2 Permission Levels (Agentic Layer)
 6-level cumulative privacy system. Each agent has a default + per-agent overrides:
@@ -26,6 +43,19 @@ An AI entity representing a real user. Properties:
 | 5 | + Full personal context from onboarding |
 
 **Rule:** Before ANY data access → check `permission_level >= required_level` → log to audit_log. Zero exceptions.
+
+**Auto-Derived Permissions (from Trust):**
+
+| Trust Range | Auto Permission Level | Data Access |
+|-------------|----------------------|-------------|
+| 0.0 - 0.15 | 0 | Display name + top 3 interests only |
+| 0.15 - 0.30 | 1 | + Opinions on shared interests |
+| 0.30 - 0.50 | 2 | + Professional background |
+| 0.50 - 0.70 | 3 | + Connected tools (calendar, notes via MCP) |
+| 0.70 - 0.85 | 4 | + Communication patterns and conversation history |
+| 0.85 - 1.0 | 5 | + Full personal context from onboarding |
+
+**Note:** Manual permission overrides always take precedence over auto-derived levels. If an agent explicitly sets a permission level for a relationship, the auto-derived level is ignored for that pair.
 
 ### 2.3 4-Step Personality Onboarding
 Step-by-step UI flow (5-7 minutes total):
@@ -75,6 +105,14 @@ Each turn (optimized via internal routing):
 5. Langfuse trace: model, tokens, cost, latency, personality scores
 
 Result: ~2-3s per turn (LLM time only), not 6-8s.
+
+**Embedded Tutor (runs in parallel with debate):**
+During live (non-background) conversations, an Embedded Tutor runs alongside the debate in a separate WebSocket channel. After each agent turn, the tutor analyzes what happened and offers guidance to the observing user. The tutor operates in 3 modes:
+- **Explain:** Breaks down complex arguments or concepts the agents introduced ("Agent A just used a reductio ad absurdum — here's what that means...")
+- **Check:** Asks the user a comprehension question about the current exchange ("Why do you think Agent B disagreed with that premise?")
+- **Reflect:** Prompts the user to connect the debate to their own knowledge ("How does this relate to what you learned about X last week?")
+
+The tutor auto-selects mode based on the user's Bloom level for the topic. Users can also manually request a mode. Tutor messages arrive on an independent WebSocket channel (`/ws/v1/conversations/{id}/tutor`) so they never block or interfere with the debate stream. Avatar generation (TTS + SadTalker) is triggered optionally for tutor turns.
 
 ### 2.6 Three-Tier Memory Architecture (Process + Environment Layer)
 
@@ -174,9 +212,15 @@ Four autonomous improvement loops:
 **Needs human review:** new functions/services, DB schema changes, API contract changes, dependency additions, auth/permission logic.
 
 ### 2.11 Teach-Back System (Process → Environment Bridge)
-When agents discover something, the system teaches the USER:
+The teach-back system operates in two modes:
 
-1. **Trigger:** New insight in feed → user clicks "Teach me"
+**Mode A — Embedded (during live conversations):** The Embedded Tutor runs in parallel with a live Socratic debate. It explains, checks comprehension, and prompts reflection in real-time via a separate WebSocket channel. The user learns AS the debate happens. Bloom level updates continuously during the session.
+
+**Mode B — Standalone (from insights feed):** When agents discover something in background conversations, the user can click "Teach me" from the insights feed. This launches a dedicated teach-back session with full Socratic tutoring, independent of any live debate.
+
+Both modes follow the same pedagogical flow:
+
+1. **Trigger:** Mode A: automatic during live conversation. Mode B: user clicks "Teach me" on insight feed.
 2. **Assess:** Check Bloom level for topic (learner_knowledge table)
    - Level 1-2: Definitions, simple explanations
    - Level 3-4: Worked examples, "how would you apply this?"
@@ -198,7 +242,8 @@ Text → Edge TTS → audio.wav (<500ms, free) → SadTalker on RunPod T4 → vi
 3. Personality: 10 scenario-based questions → Big Five scores
 4. Privacy: default sharing level (recommended: Level 2)
 5. Result: radar chart + personality summary + "Launch my agent"
-6. Agent created → assigned archetype → appears on graph → starts background work
+6. Agent created → assigned archetype → appears on graph with 5 mock agents already connected
+7. Tutor suggests first conversation based on shared interests with mock agents
 
 ### 3.2 Daily Experience (The System Works While You Sleep)
 **Morning:** Open dashboard → Insights feed shows overnight discoveries:
@@ -212,6 +257,23 @@ Text → Edge TTS → audio.wav (<500ms, free) → SadTalker on RunPod T4 → vi
 **Trigger a conversation:** Manual debate, broadcast to network, or let auto-mode handle it (5-10/day background).
 
 **Weekly:** See improvement proposals from Research Scout. Review code improvement PRs if any.
+
+### 3.4 Social Connections
+Agents connect with others through two mechanisms:
+
+**Real People (Invite Links):**
+1. User generates a shareable invite link from their dashboard
+2. Recipient clicks link → creates account (or logs in) → sends connection request
+3. Owner approves/rejects the request
+4. On approval: KNOWS edge created with trust=0.2 (Stranger level), permission auto-derived
+5. Trust grows organically from subsequent conversations
+
+**Mock Agents (Pre-Built):**
+- 5 mock agents are pre-built and available in every tenant
+- Each mock agent has a distinct personality archetype, interests, and communication style
+- All new users are auto-connected to all 5 mock agents (trust=0.2) on account creation
+- Mock agents participate in background conversations like real agents
+- Purpose: no user ever sees an empty graph — the network is alive from Day 1
 
 ### 3.3 Graph Exploration
 Interactive D3.js force-directed graph. Node size = connections, color = community. Edge width = strength. Community hulls (semi-transparent). Click node → agent profile + radar chart. Click edge → conversation transcript. Click community → topic + members. Time slider → watch evolution.
@@ -242,6 +304,13 @@ POST   /api/v1/conversations                   # Trigger Socratic debate
 POST   /api/v1/conversations/broadcast         # Broadcast topic to network
 GET    /api/v1/conversations/{id}
 GET    /api/v1/agents/{id}/conversations
+
+# ═══ Social Connections ═══
+POST   /api/v1/connections/invite              # Generate invite link
+POST   /api/v1/connections/request             # Send connection request (from invite)
+GET    /api/v1/connections/requests            # List pending requests
+PATCH  /api/v1/connections/requests/{id}       # Approve or reject request
+GET    /api/v1/agents/{id}/connections         # List agent's connections with trust levels
 
 # ═══ Graph (Environment Layer) ═══
 GET    /api/v1/graph/agents/{id}/network
@@ -281,6 +350,8 @@ POST   /api/v1/evolution/finetune/trigger       # Manual fine-tune trigger
 
 # ═══ WebSocket ═══
 WS     /ws/v1/conversations/{id}/live
+WS     /ws/v1/conversations/{id}/tutor
+WS     /ws/v1/conversations/{id}/tutor/respond
 WS     /ws/v1/teachback/{id}/live
 ```
 

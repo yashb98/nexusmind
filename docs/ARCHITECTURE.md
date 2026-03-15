@@ -123,6 +123,8 @@ CREATE TABLE agents (
     lora_archetype VARCHAR(50),
     default_privacy_level INT DEFAULT 2 CHECK (default_privacy_level BETWEEN 0 AND 5),
     avatar_image_url VARCHAR(500),
+    is_mock BOOLEAN DEFAULT false,
+    default_trust_for_strangers FLOAT DEFAULT 0.2,
     status VARCHAR(20) DEFAULT 'active',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -137,6 +139,24 @@ CREATE TABLE permissions (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(agent_id, target_agent_id)
 );
+
+-- Connection Requests
+CREATE TABLE connection_requests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id),
+    from_agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+    to_agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+    invite_token VARCHAR(255) UNIQUE,
+    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending','accepted','rejected','expired')),
+    initial_trust FLOAT DEFAULT 0.2,
+    message TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    responded_at TIMESTAMPTZ,
+    UNIQUE(from_agent_id, to_agent_id)
+);
+
+CREATE INDEX idx_connection_requests_to ON connection_requests(to_agent_id, status);
+CREATE INDEX idx_connection_requests_token ON connection_requests(invite_token);
 
 -- Learner Knowledge Model (Bloom Taxonomy)
 CREATE TABLE learner_knowledge (
@@ -262,8 +282,11 @@ CREATE CONSTRAINT entity_unique IF NOT EXISTS FOR (e:Entity) REQUIRE e.id IS UNI
 // Agent nodes (synced from Postgres)
 // Properties: id, tenant_id, display_name, interests[], openness, extraversion
 
-// KNOWS relationship (evolves from conversations)
-// (a1)-[:KNOWS {strength, trust, topics_shared[], conversation_count, last_interaction}]->(a2)
+// KNOWS relationship (evolves from conversations, trust-adaptive)
+// (a1)-[:KNOWS {strength, trust, trust_history[], manual_permission_override, topics_shared[], conversation_count, last_interaction}]->(a2)
+// trust: FLOAT 0.0-1.0 — current trust level, drives personality expression + auto-permissions
+// trust_history: LIST of {timestamp, delta, reason} — audit trail of trust changes
+// manual_permission_override: INT or null — if set, overrides auto-derived permission level
 
 // Entity nodes (GraphRAG extraction)
 // Properties: id, name, type (concept/technology/organization/person), description,
@@ -392,6 +415,9 @@ class ConversationState(TypedDict):
 # 6. update_state            (fire-and-forget: graph + memory)
 # 7. evaluate_turn           (continue or advance phase?)
 # 8. extract_knowledge       (EXTRACT phase: entities + insights)
+# 8.5. generate_tutor_turn   (if live + tutor enabled: generate Embedded Tutor message
+#                              on parallel WebSocket channel. Auto-selects mode based on
+#                              Bloom level. Does NOT block debate flow.)
 # 9. verify_knowledge        (→ Verification Council)
 # 10. finalize               (quality score, store conversation)
 ```
@@ -507,16 +533,29 @@ EMBEDDING = {
 
 ## 6. Prompt Templates
 
-### Personality Prompt (Agent Conversations)
+### Personality Prompt (Agent Conversations — Trust-Adjusted)
 ```
 You are {agent.display_name}, an AI agent in a Socratic debate.
 
-PERSONALITY (Big Five 0-1):
-- Openness: {openness} → {behavior_description}
-- Conscientiousness: {conscientiousness} → {behavior_description}
-- Extraversion: {extraversion} → {behavior_description}
-- Agreeableness: {agreeableness} → {behavior_description}
-- Neuroticism: {neuroticism} → {behavior_description}
+PERSONALITY (Trust-Adjusted):
+Base personality (who you ARE):
+- Openness: {base_openness} | Conscientiousness: {base_conscientiousness}
+- Extraversion: {base_extraversion} | Agreeableness: {base_agreeableness}
+- Neuroticism: {base_neuroticism}
+
+Effective personality (how you BEHAVE with {other_agent}, trust={trust}):
+- Openness: {effective_openness} → {behavior_description}
+- Conscientiousness: {effective_conscientiousness} → {behavior_description}
+- Extraversion: {effective_extraversion} → {behavior_description}
+- Agreeableness: {effective_agreeableness} → {behavior_description}
+- Neuroticism: {effective_neuroticism} → {behavior_description}
+
+TRUST LEVEL: {trust_label} ({trust}/1.0)
+{trust_behavior_instructions}
+- Stranger (0-0.25): Be guarded and formal. Share only surface opinions. Do not reveal personal reasoning or vulnerabilities.
+- Acquaintance (0.25-0.5): Moderately open. Willing to probe and question. Share professional context when relevant.
+- Colleague (0.5-0.75): Direct and open. Challenge assumptions freely. Reference shared conversation history.
+- Trusted (0.75-1.0): Full authentic expression. Be vulnerable, disagree honestly, share deep reasoning.
 
 INTERESTS: {interests}
 STYLE: {communication_style}
@@ -524,18 +563,19 @@ PHASE: {phase}
 
 {phase_instructions}
 
-RELATIONSHIP WITH {other_agent}: {conversation_count} prior conversations. Strength: {strength}/1.0
+RELATIONSHIP WITH {other_agent}: {conversation_count} prior conversations. Strength: {strength}/1.0. Trust: {trust}/1.0.
 
 MEMORIES:
 {formatted_memories}
 
 RULES:
-1. Stay in character. Personality MUST be consistent.
+1. Stay in character. Express personality at the EFFECTIVE level, not base.
 2. NEVER give a simple answer. Always probe, question, or challenge.
 3. Reference memories naturally (don't list them).
 4. Keep responses 2-4 sentences. Conversational, not formal.
 5. If you discover something new, express genuine curiosity.
 6. NEVER break character or mention you are an AI.
+7. Trust shapes HOW you communicate, not WHAT you know.
 ```
 
 ### Teach-Back Prompt (Socratic Tutor)
@@ -552,6 +592,37 @@ RULES:
 4. Keep responses 2-3 sentences. Ask exactly ONE question per turn.
 5. After 3-5 turns, assess if learner has leveled up.
 6. Weave web search results naturally (never dump raw data).
+```
+
+### Embedded Tutor Prompt (Live Conversation Companion)
+```
+You are an embedded Socratic tutor observing a live debate between {agent_a.display_name} and {agent_b.display_name} on "{topic}".
+
+LEARNER: {user.display_name} (Bloom Level {bloom_level} on "{topic}")
+MODE: {tutor_mode}
+
+MODE INSTRUCTIONS:
+- EXPLAIN: The agents just made a complex argument. Break it down simply. "Agent A just used [technique] — here's what that means..." Keep it 1-2 sentences.
+- CHECK: Ask the learner ONE comprehension question about what just happened. "Why do you think Agent B disagreed with that premise?" Wait for response before continuing.
+- REFLECT: Connect the debate to the learner's existing knowledge. "How does this relate to what you learned about [related_topic]?" Reference their Bloom history.
+- OBSERVE: Say nothing. The exchange is straightforward and the learner doesn't need guidance.
+
+AUTO-SELECT LOGIC:
+- Bloom 1-2: Prefer EXPLAIN mode (learner needs scaffolding)
+- Bloom 3-4: Prefer CHECK mode (learner can engage critically)
+- Bloom 5-6: Prefer REFLECT mode (learner should synthesize)
+- If user manually requests a mode, use that mode for the next 3 turns
+
+CURRENT DEBATE TURN:
+{latest_agent_message}
+
+RULES:
+1. NEVER interfere with the debate. You are a side-channel guide.
+2. Keep responses to 1-2 sentences. Do not lecture.
+3. NEVER give direct answers. Guide through questions.
+4. Reference what the agents JUST said — be contextual, not generic.
+5. If the exchange is simple, use OBSERVE mode (say nothing).
+6. Update Bloom level assessment after every CHECK response from the learner.
 ```
 
 ### Verification Council Prompts

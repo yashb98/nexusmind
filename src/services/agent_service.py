@@ -27,6 +27,8 @@ def _row_to_response(row: dict) -> AgentResponse:
         lora_archetype=row.get("lora_archetype"),
         default_privacy_level=row["default_privacy_level"],
         avatar_image_url=row.get("avatar_image_url"),
+        default_trust_for_strangers=row.get("default_trust_for_strangers", 0.2),
+        is_mock=row.get("is_mock", False),
         status=row["status"],
     )
 
@@ -40,8 +42,9 @@ async def create_agent(req: AgentCreate, user_id: str, tenant_id: str) -> AgentR
            (id, user_id, tenant_id, display_name,
             openness, conscientiousness, extraversion, agreeableness, neuroticism,
             interests, communication_style, lora_archetype,
-            default_privacy_level, avatar_image_url)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+            default_privacy_level, avatar_image_url,
+            default_trust_for_strangers, is_mock)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
            RETURNING *""",
         agent_id,
         uuid.UUID(user_id),
@@ -57,9 +60,31 @@ async def create_agent(req: AgentCreate, user_id: str, tenant_id: str) -> AgentR
         req.lora_archetype,
         req.default_privacy_level,
         req.avatar_image_url,
+        req.default_trust_for_strangers,
+        req.is_mock,
     )
 
     await _sync_agent_to_neo4j(row)
+
+    # Auto-connect non-mock agents to all mock agents
+    if not req.is_mock:
+        mock_agents = await postgres.fetch(
+            "SELECT id, default_trust_for_strangers FROM agents WHERE is_mock = true"
+        )
+        for mock in mock_agents:
+            await neo4j_client.execute_write(
+                """MATCH (a:Agent {id: $aid}), (b:Agent {id: $bid})
+                MERGE (a)-[r:KNOWS]-(b)
+                ON CREATE SET r.strength = 0.3,
+                              r.trust = $trust,
+                              r.topics_shared = [],
+                              r.conversation_count = 0,
+                              r.trust_history = [$trust]""",
+                aid=str(agent_id),
+                bid=str(mock["id"]),
+                trust=mock["default_trust_for_strangers"],
+            )
+
     logger.info("agent_created", agent_id=str(agent_id))
     return _row_to_response(row)
 

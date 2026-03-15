@@ -34,7 +34,8 @@
   - Step 3: 10 scenario questions (one per page, progress bar, animated transitions)
   - Step 4: Privacy level (3 options with plain-language descriptions)
   - Result: animated radar chart + personality summary + archetype badge + "Launch" button
-  - POST /onboarding/personality → POST /agents → redirect to dashboard
+  - Result screen shows: "5 agents are already waiting to debate you!" with mini-graph preview showing the 5 mock agents connected to the new user's agent
+  - POST /onboarding/personality → POST /agents → auto-connect mock agents → redirect to dashboard
 
 ### 6.3 Graph Visualization
 - `frontend/src/components/graph/GraphView.tsx`:
@@ -61,16 +62,26 @@
   - Compatibility score with selected agent
   - "Start conversation with..." button
 
-### 6.5 Conversation Viewer
+### 6.5 Conversation Viewer (Split Panel with Embedded Tutor)
 - `frontend/src/components/panels/ConversationViewer.tsx`:
-  - Chat bubbles (left = Agent A, right = Agent B)
-  - Phase indicator at each turn (colored badge: OPEN/PROBE/DEEPEN/CHALLENGE/SYNTHESIZE)
-  - Background conversation badge (if triggered by scheduler)
-  - Extracted insights as colored cards at bottom
-  - Extracted entities as a mini knowledge graph (D3.js force layout, small)
-  - Verification badge per insight (✓ / ⚠ / ✗ with tooltip showing council reasoning)
-  - Quality score badge
-  - Audit expandable section
+  - **Split panel layout:** 60% debate panel (left) + 40% tutor panel (right)
+  - **Debate panel (left):**
+    - Chat bubbles (left = Agent A, right = Agent B)
+    - Phase indicator at each turn (colored badge: OPEN/PROBE/DEEPEN/CHALLENGE/SYNTHESIZE)
+    - Background conversation badge (if triggered by scheduler)
+    - Extracted insights as colored cards at bottom
+    - Extracted entities as a mini knowledge graph (D3.js force layout, small)
+    - Verification badge per insight (✓ / ⚠ / ✗ with tooltip showing council reasoning)
+    - Quality score badge
+    - Audit expandable section
+  - **Tutor panel (right):**
+    - Tutor messages stream (explain/check/reflect) with mode indicator badge per message
+    - User response input for CHECK mode questions
+    - Bloom level progress bar (6 segments) with real-time updates
+    - Mode selector: auto / explain / check / reflect (manual override)
+    - Optional avatar video for tutor messages
+  - **Two WebSocket connections:** `/ws/v1/conversations/{id}/live` (debate) + `/ws/v1/conversations/{id}/tutor` (tutor)
+  - **Auto-minimize:** tutor panel collapses to icon when in OBSERVE mode or for background conversations (no tutor). Click to expand.
 
 ### 6.6 Insights Feed
 - `frontend/src/components/panels/InsightsFeed.tsx`:

@@ -1,5 +1,9 @@
 """Teach-back service — Bloom-adapted Socratic tutoring."""
 
+# TeachBackService handles STANDALONE teach-back sessions (Mode B).
+# For EMBEDDED tutor during live conversations (Mode A), see ConversationService.generate_tutor_turn().
+# Both modes share the same Bloom assessment logic and prompt templates.
+
 import uuid
 
 import structlog

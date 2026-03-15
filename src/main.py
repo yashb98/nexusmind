@@ -12,6 +12,7 @@ from src.config import settings
 from src.db import neo4j_client, postgres, qdrant_client, redis_client
 from src.routes.agents import router as agents_router
 from src.routes.auth import router as auth_router
+from src.routes.connections import router as connections_router
 from src.routes.avatar import router as avatar_router
 from src.routes.conversations import router as conversations_router
 from src.routes.evolution import router as evolution_router
@@ -75,6 +76,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(onboarding_router)
 app.include_router(agents_router)
+app.include_router(connections_router)
 app.include_router(permissions_router)
 app.include_router(graph_router)
 app.include_router(conversations_router)

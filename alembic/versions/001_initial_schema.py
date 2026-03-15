@@ -57,6 +57,8 @@ def upgrade() -> None:
         sa.Column("lora_archetype", sa.String(50)),
         sa.Column("default_privacy_level", sa.Integer, server_default="2"),
         sa.Column("avatar_image_url", sa.String(500)),
+        sa.Column("default_trust_for_strangers", sa.Float, server_default="0.2", nullable=False),
+        sa.Column("is_mock", sa.Boolean, server_default="false", nullable=False),
         sa.Column("status", sa.String(20), server_default="active"),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()")),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()")),
@@ -79,6 +81,20 @@ def upgrade() -> None:
         sa.UniqueConstraint("agent_id", "target_agent_id", name="uq_permissions_agent_target"),
         sa.CheckConstraint("level BETWEEN 0 AND 5", name="ck_permissions_level"),
     )
+
+    # 4b. connection_requests
+    op.create_table(
+        "connection_requests",
+        sa.Column("id", sa.dialects.postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column("from_agent_id", sa.dialects.postgresql.UUID(as_uuid=True), sa.ForeignKey("agents.id"), nullable=False),
+        sa.Column("to_agent_id", sa.dialects.postgresql.UUID(as_uuid=True), sa.ForeignKey("agents.id"), nullable=False),
+        sa.Column("message", sa.String(500), nullable=True),
+        sa.Column("status", sa.String(20), server_default="pending", nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
+        sa.Column("responded_at", sa.DateTime(timezone=True), nullable=True),
+        sa.UniqueConstraint("from_agent_id", "to_agent_id"),
+    )
+    op.create_index("idx_connection_requests_to", "connection_requests", ["to_agent_id", "status"])
 
     # 5. learner_knowledge
     op.create_table(
@@ -221,6 +237,7 @@ def downgrade() -> None:
     op.drop_table("verification_decisions")
     op.drop_table("teachback_sessions")
     op.drop_table("learner_knowledge")
+    op.drop_table("connection_requests")
     op.drop_table("permissions")
     op.drop_table("agents")
     op.drop_table("users")

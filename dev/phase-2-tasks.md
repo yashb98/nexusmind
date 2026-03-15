@@ -60,6 +60,23 @@
 
 ### 2.6 Seed Script
 - `scripts/seed_demo.py`: 1 tenant, 1 user, 10 agents (diverse Big Five, varied archetypes), 5 KNOWS edges, 3 Topic nodes
+- **Note:** 5 of the 10 agents must be mock agents with `is_mock=True`. Mock agents are auto-connected to every new user at trust=0.2. They have diverse archetypes (one per archetype category) and predefined interests spanning common topics.
+
+### 2.8 Connection Service
+- `src/models/connection.py` — ConnectionInvite, ConnectionRequest, ConnectionResponse, ConnectionList
+- `src/services/connection.py`:
+  - `generate_invite(agent_id)` → invite token + shareable link
+  - `send_request(from_agent_id, to_agent_id, invite_token, message)` → pending request
+  - `respond_to_request(request_id, action: 'accept'|'reject')` → on accept: create KNOWS edge (trust=0.2), auto-derive permission
+  - `list_requests(agent_id, status='pending')` → list of pending requests
+  - `list_connections(agent_id)` → connections with trust levels and permission info
+  - `auto_connect_mock_agents(agent_id)` → connect new agent to all 5 mock agents (trust=0.2)
+- `src/routes/connections.py`:
+  - POST /api/v1/connections/invite
+  - POST /api/v1/connections/request
+  - GET /api/v1/connections/requests
+  - PATCH /api/v1/connections/requests/{id}
+  - GET /api/v1/agents/{id}/connections
 
 ### 2.7 Tests
 - `tests/unit/test_personality.py` — scoring, archetype assignment, compatibility, prompt generation

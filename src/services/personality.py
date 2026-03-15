@@ -428,6 +428,53 @@ def compute_personality_result(answers: list[ScenarioAnswer]) -> PersonalityResu
     )
 
 
+def compute_trust_modifier(trust_level: float) -> float:
+    """Convert trust level (0-1) to personality expression multiplier."""
+    if trust_level <= 0.2:
+        return 0.3
+    elif trust_level <= 0.5:
+        return 0.3 + (trust_level - 0.2) * (0.6 - 0.3) / (0.5 - 0.2)
+    elif trust_level <= 0.8:
+        return 0.6 + (trust_level - 0.5) * (0.85 - 0.6) / (0.8 - 0.5)
+    else:
+        return 0.85 + (trust_level - 0.8) * (1.0 - 0.85) / (1.0 - 0.8)
+
+
+def compute_effective_personality(
+    base_big_five: dict[str, float],
+    trust_level: float,
+) -> dict[str, float]:
+    """Apply trust modifier to base personality."""
+    modifier = compute_trust_modifier(trust_level)
+    return {trait: value * modifier for trait, value in base_big_five.items()}
+
+
+def get_trust_label(trust_level: float) -> str:
+    """Human-readable trust label for prompts."""
+    if trust_level < 0.2:
+        return "stranger"
+    elif trust_level < 0.5:
+        return "acquaintance"
+    elif trust_level < 0.8:
+        return "colleague"
+    else:
+        return "trusted"
+
+
+def trust_derived_permission(trust_level: float) -> int:
+    """Auto-derive permission level from trust. Users can override."""
+    if trust_level < 0.2:
+        return 0
+    elif trust_level < 0.4:
+        return 1
+    elif trust_level < 0.6:
+        return 2
+    elif trust_level < 0.8:
+        return 3
+    else:
+        return 4
+
+
 def generate_system_prompt(
     agent_name: str,
     scores: BigFiveScores,

@@ -58,6 +58,12 @@
           "carbon-aware scheduling" -[:REDUCES]→ "compute cost" -[:REDUCES]→ "carbon emissions"
        c. Score conversation quality (LLM-as-judge)
     8. `finalize` — store Conversation + Insight + Entity nodes in Neo4j
+  - **Embedded Tutor integration:**
+    - After each agent turn, generate a tutor turn on the parallel tutor WebSocket channel
+    - Tutor WebSocket: `/ws/v1/conversations/{id}/tutor` (read) and `/ws/v1/conversations/{id}/tutor/respond` (write)
+    - Auto-select tutor mode (explain/check/reflect/observe) based on user's Bloom level for the topic
+    - User can manually override mode via tutor/respond channel
+    - Update Bloom level after each CHECK response from the learner
 
 ### 3.4 GraphRAG Entity Extraction
 - Add to `src/services/knowledge.py`:
@@ -95,6 +101,29 @@
 - `tests/integration/test_insights.py` — insights + entities appear after conversation
 - `tests/llm_eval/test_personality_consistency.py` — same agent, 5 convos, variance < 0.5
 - `tests/llm_eval/test_socratic_behavior.py` — agents never give direct answers in PROBE/CHALLENGE
+
+### 3.8 Embedded Tutor Integration
+- `src/services/tutor.py`:
+  - LangGraph node `generate_tutor_turn(state, latest_message)`:
+    - Runs as Node 8.5 in the conversation graph (after agent turn, before extract)
+    - Only active for live (non-background) conversations with tutor enabled
+    - Auto-selects mode based on user's Bloom level: L1-2 → EXPLAIN, L3-4 → CHECK, L5-6 → REFLECT
+    - Falls back to OBSERVE if exchange is straightforward (no complex arguments detected)
+    - Does NOT block the debate flow — runs in parallel via asyncio.create_task
+  - WebSocket channels:
+    - `/ws/v1/conversations/{id}/tutor` — server pushes tutor messages (explain, check, reflect)
+    - `/ws/v1/conversations/{id}/tutor/respond` — user sends responses to CHECK questions
+  - Prompt template: Embedded Tutor Prompt (see ARCHITECTURE.md section 6)
+  - Mode logic:
+    - Auto-mode: Bloom level determines default mode per turn
+    - Manual override: user requests a mode → applies for next 3 turns, then reverts to auto
+    - OBSERVE: tutor stays silent (no message sent on WebSocket)
+  - Bloom updates: after user responds to CHECK question, assess and update learner_knowledge
+- **Test criteria:**
+  - `tests/unit/test_tutor_mode_selection.py` — mode auto-selects correctly based on Bloom level
+  - `tests/unit/test_tutor_prompt.py` — prompt includes latest agent message and correct mode instructions
+  - `tests/integration/test_tutor_websocket.py` — tutor messages arrive on separate channel, do not block debate
+  - `tests/integration/test_tutor_bloom_update.py` — Bloom level updates after CHECK response
 
 ## Checkpoint
 ```bash

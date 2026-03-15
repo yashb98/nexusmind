@@ -60,3 +60,21 @@
 **Date:** 2026-03-15
 **Decision:** All services in ONE FastAPI app. Clean service boundaries enable future split.
 **Rationale:** Zero benefit from microservices at <100 users. Single process = simpler deployment, debugging, testing. Internal routing (ADR-004) already optimizes performance within monolith.
+
+## ADR-013: Trust-Adaptive Personality Expression
+**Date:** 2026-03-15
+**Decision:** Big Five scores are fixed BASE personality, but expression adapts per-relationship via a trust modifier (0.3-1.0). Trust grows from positive conversations (+0.05/+0.03/+0.02 based on quality) and decays from negative signals (-0.10). Permissions auto-derive from trust level with manual override capability.
+**Rationale:** In real life, nobody is "70% open" to everyone. You're guarded with strangers and vulnerable with close friends. Trust-adaptive personality creates authentic, evolving relationships instead of static interactions. This mirrors how human relationships actually develop.
+**Consequences:** Personality prompt must compute effective traits per-conversation using trust modifier. KNOWS edge in Neo4j gains trust, trust_history, and manual_permission_override fields. Permission system gains a trust-derived layer that auto-maps trust ranges to permission levels 0-5. Manual overrides always take precedence.
+
+## ADR-014: Embedded Tutor During Live Conversations
+**Date:** 2026-03-15
+**Decision:** A Socratic tutor runs in a parallel WebSocket channel during live conversations. It operates in 4 modes: explain, check, reflect, and observe. Mode auto-selected based on Bloom level, with manual override. Standalone teach-back is kept for background conversation insights.
+**Rationale:** Cognitive apprenticeship research shows 34% better retention when guidance is provided in-context rather than after the fact. Watching a debate without understanding is wasted potential. The embedded tutor transforms passive observation into active learning.
+**Consequences:** Two WebSocket channels per live conversation (debate + tutor). Extra LLM call per agent turn for tutor generation. Frontend requires split-panel layout (60% debate, 40% tutor). Tutor channel is independent — network issues on one channel do not affect the other.
+
+## ADR-015: Mock Agents + Social Connection Model
+**Date:** 2026-03-15
+**Decision:** 5 pre-built mock agents with diverse personalities auto-connect to every new user at trust=0.2. Real human connections are established via invite links + connection requests. All new relationships start at trust=0.2 (Stranger level).
+**Rationale:** An empty graph is a dead product. New users need to see their agent on a living network immediately. Trust-based connection model mirrors how real human relationships develop — you don't grant full access to someone you just met.
+**Consequences:** New connection_requests table in Postgres. Mock agents need periodic maintenance (personality updates, interest refresh). 5 extra KNOWS edges created per new user signup. Seed script must create mock agents with is_mock=true flag.
