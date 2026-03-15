@@ -12,11 +12,14 @@ from src.config import settings
 from src.db import neo4j_client, postgres, qdrant_client, redis_client
 from src.routes.agents import router as agents_router
 from src.routes.auth import router as auth_router
+from src.routes.avatar import router as avatar_router
 from src.routes.conversations import router as conversations_router
 from src.routes.graph import router as graph_router
 from src.routes.insights import router as insights_router
 from src.routes.onboarding import router as onboarding_router
 from src.routes.permissions import router as permissions_router
+from src.routes.teachback import router as teachback_router
+from src.routes.verification import router as verification_router
 from src.utils.logging import setup_logging
 
 logger = structlog.get_logger(__name__)
@@ -74,6 +77,9 @@ app.include_router(permissions_router)
 app.include_router(graph_router)
 app.include_router(conversations_router)
 app.include_router(insights_router)
+app.include_router(verification_router)
+app.include_router(teachback_router)
+app.include_router(avatar_router)
 
 
 @app.get("/health")
