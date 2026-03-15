@@ -38,9 +38,7 @@ def decode_token(token: str) -> dict:
     try:
         payload = jwt.decode(token, settings.auth.secret, algorithms=[settings.auth.algorithm])
         if payload.get("sub") is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
-            )
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
         return payload
     except JWTError:
         raise HTTPException(

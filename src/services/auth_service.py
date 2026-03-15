@@ -16,9 +16,7 @@ async def register(req: RegisterRequest) -> TokenResponse:
     """Register a new user with auto-created tenant."""
     existing = await postgres.fetchrow("SELECT id FROM users WHERE email = $1", req.email)
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Email already registered"
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
 
     tenant_id = str(uuid.uuid4())
     await postgres.execute(

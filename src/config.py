@@ -127,9 +127,7 @@ class SchedulerSettings(BaseSettings):
 class MicroFinetuneSettings(BaseSettings):
     """Micro fine-tuning settings (hourly)."""
 
-    model_config = SettingsConfigDict(
-        env_prefix="MICRO_FINETUNE_", env_file=".env", extra="ignore"
-    )
+    model_config = SettingsConfigDict(env_prefix="MICRO_FINETUNE_", env_file=".env", extra="ignore")
 
     enabled: bool = Field(default=True)
     interval_hours: int = Field(default=1)
@@ -141,9 +139,7 @@ class MicroFinetuneSettings(BaseSettings):
 class FullFinetuneSettings(BaseSettings):
     """Full fine-tuning settings (nightly)."""
 
-    model_config = SettingsConfigDict(
-        env_prefix="FULL_FINETUNE_", env_file=".env", extra="ignore"
-    )
+    model_config = SettingsConfigDict(env_prefix="FULL_FINETUNE_", env_file=".env", extra="ignore")
 
     cron: str = Field(default="0 2 * * *")
     rank: int = Field(default=16)
@@ -157,9 +153,7 @@ class FullFinetuneSettings(BaseSettings):
 class VerificationSettings(BaseSettings):
     """Verification council settings."""
 
-    model_config = SettingsConfigDict(
-        env_prefix="VERIFICATION_", env_file=".env", extra="ignore"
-    )
+    model_config = SettingsConfigDict(env_prefix="VERIFICATION_", env_file=".env", extra="ignore")
 
     enabled: bool = Field(default=True)
     skeptic_accept_threshold: float = Field(default=0.8)
