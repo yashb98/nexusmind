@@ -1,4 +1,4 @@
-# ARCHITECTURE.md — NexusMind System Design
+# ARCHITECTURE.md — NexusMind v2 System Design
 
 ## 1. Component Diagram (Demo Mode)
 
@@ -6,37 +6,85 @@
 ┌──────────────────────────────────────────────────────────────────────┐
 │                     React Frontend (Vercel)                           │
 │  D3.js graph │ Conversation viewer │ Teach-back + avatar │ Dashboard │
+│  Onboarding flow │ Privacy dashboard │ Evolution proposals panel     │
 └─────────────────────────────┬────────────────────────────────────────┘
                               │ HTTPS + WebSocket
 ┌─────────────────────────────▼────────────────────────────────────────┐
 │                    FastAPI Monolith (Railway/Render)                   │
 │                                                                       │
-│  Routes:                          Services:                           │
-│  /api/v1/auth/*                   PersonalityService                  │
-│  /api/v1/agents/*                 ConversationService (LangGraph)     │
-│  /api/v1/permissions/*            MemoryService (Qdrant + Neo4j)      │
-│  /api/v1/conversations/*          PermissionService (audit)           │
-│  /api/v1/graph/*                  GraphService (communities, PageRank)│
-│  /api/v1/insights/*               KnowledgeService (extraction)       │
-│  /api/v1/teachback/*              TeachBackService (Bloom + Socratic) │
-│  /api/v1/avatar/*                 AvatarService (TTS + SadTalker)     │
-│  /api/v1/learner/*                SearchService (SearXNG)             │
-│  /ws/v1/*                         FineTuneService (MLX QLoRA)         │
-│                                   LLMService (LiteLLM gateway)        │
+│  Services (call each other via DIRECT Python — not HTTP):            │
+│  ┌─────────────┐  ┌──────────────────┐  ┌───────────────────┐       │
+│  │ Personality  │  │ Conversation     │  │ Memory (3-tier)   │       │
+│  │ Service      │  │ Service          │  │ Hot+Graph+Cold    │       │
+│  │              │  │ (LangGraph       │  │                   │       │
+│  │ Big Five →   │  │  Socratic SM)    │  │ Permission-       │       │
+│  │ prompts      │  │                  │  │ filtered retrieval│       │
+│  └──────────────┘  └──────────────────┘  └───────────────────┘       │
+│  ┌─────────────┐  ┌──────────────────┐  ┌───────────────────┐       │
+│  │ Verification │  │ TeachBack        │  │ Graph Service     │       │
+│  │ Council      │  │ Service          │  │                   │       │
+│  │              │  │                  │  │ Communities,      │       │
+│  │ Skeptic +    │  │ Bloom adaptive   │  │ GraphRAG entities,│       │
+│  │ Connector +  │  │ Socratic tutor   │  │ recommendations   │       │
+│  │ Judge        │  │                  │  │                   │       │
+│  └──────────────┘  └──────────────────┘  └───────────────────┘       │
+│  ┌─────────────┐  ┌──────────────────┐  ┌───────────────────┐       │
+│  │ Scheduler   │  │ FineTune         │  │ Evolution         │       │
+│  │             │  │ Service          │  │ Service           │       │
+│  │ Always-on   │  │                  │  │                   │       │
+│  │ EXPLORE /   │  │ Micro (hourly)   │  │ Research scout +  │       │
+│  │ RESEARCH /  │  │ Full (nightly)   │  │ Code improvement  │       │
+│  │ REFINE      │  │ Merge + evaluate │  │ proposals         │       │
+│  └──────────────┘  └──────────────────┘  └───────────────────┘       │
+│  ┌─────────────┐  ┌──────────────────┐  ┌───────────────────┐       │
+│  │ Avatar      │  │ Search           │  │ LLM Service       │       │
+│  │ Service     │  │ Service          │  │                   │       │
+│  │             │  │                  │  │ LiteLLM gateway   │       │
+│  │ TTS +       │  │ SearXNG          │  │ RunPod primary    │       │
+│  │ SadTalker   │  │ + cache          │  │ Anthropic fallback│       │
+│  └──────────────┘  └──────────────────┘  └───────────────────┘       │
 │                                                                       │
-│  Middleware: TenantMiddleware │ AuthMiddleware │ AuditMiddleware       │
+│  Middleware: Tenant │ Auth │ Audit │ RateLimit                        │
 └──┬──────────┬──────────┬──────────┬──────────┬───────────────────────┘
    │          │          │          │          │
 ┌──▼──┐  ┌───▼──┐  ┌───▼───┐  ┌──▼───┐  ┌──▼──────────────────┐
-│PG   │  │Neo4j │  │Qdrant │  │Redis │  │LLM (MLX local /    │
-│Supa │  │Aura  │  │Cloud  │  │      │  │ RunPod fallback)   │
-│Free │  │Free  │  │Free   │  │Free  │  │ + SearXNG (Docker) │
-└─────┘  └──────┘  └───────┘  └──────┘  └────────────────────┘
+│PG   │  │Neo4j │  │Qdrant │  │Redis │  │RunPod Serverless    │
+│Supa │  │Aura  │  │Cloud  │  │Upst. │  │ vLLM (Qwen 7B)     │
+│base │  │      │  │3 coll.│  │      │  │ T4 (SadTalker)      │
+│Free │  │Free  │  │Free   │  │Free  │  │ A10G (fine-tune)    │
+└─────┘  └──────┘  └───────┘  └──────┘  └─────────────────────┘
 ```
 
-## 2. Database Schemas
+## 2. Internal Routing (Performance Optimization)
 
-### 2.1 PostgreSQL (Supabase)
+All services call each other via DIRECT Python imports. No HTTP between services.
+
+```python
+# PATTERN: Parallel I/O for independent operations
+async def run_turn(self, state: ConversationState):
+    # These three are independent — run in parallel
+    memories, relationship, permission_ok = await asyncio.gather(
+        self.memory.retrieve(state.current_speaker, state.topic),
+        self.graph.get_relationship(state.agent_a_id, state.agent_b_id),
+        self.permission.check_access(state.agent_a_id, state.agent_b_id, 1, "conversation"),
+    )
+    
+    # Only ONE external network call per turn
+    response = await self.llm.generate(prompt, messages, stream=True)
+    
+    # Graph + memory updates: fire-and-forget (don't block response)
+    asyncio.create_task(self.graph.update_relationship(...))
+    asyncio.create_task(self.memory.store(...))
+    
+    return response  # Returns in ~2-3s (LLM time only)
+
+# RESULT: Turn latency = LLM inference time only (~2-3s)
+# vs naive sequential: ~6-8s
+```
+
+## 3. Database Schemas
+
+### 3.1 PostgreSQL (Supabase)
 
 ```sql
 -- Multi-tenant
@@ -80,7 +128,7 @@ CREATE TABLE agents (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Permissions (Agentic Layer)
+-- Permissions (6-level)
 CREATE TABLE permissions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
@@ -90,13 +138,13 @@ CREATE TABLE permissions (
     UNIQUE(agent_id, target_agent_id)
 );
 
--- Learner Knowledge Model (Process + Environment Layer)
+-- Learner Knowledge Model (Bloom Taxonomy)
 CREATE TABLE learner_knowledge (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id),
     topic VARCHAR(255) NOT NULL,
     bloom_level INT DEFAULT 1 CHECK (bloom_level BETWEEN 1 AND 6),
-    confidence FLOAT DEFAULT 0.0 CHECK (confidence BETWEEN 0 AND 1),
+    confidence FLOAT DEFAULT 0.0,
     misconceptions JSONB DEFAULT '[]',
     question_count INT DEFAULT 0,
     correct_count INT DEFAULT 0,
@@ -104,7 +152,7 @@ CREATE TABLE learner_knowledge (
     UNIQUE(user_id, topic)
 );
 
--- Teach-Back Sessions (Process Layer)
+-- Teach-Back Sessions
 CREATE TABLE teachback_sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id),
@@ -117,6 +165,53 @@ CREATE TABLE teachback_sessions (
     avatar_id UUID,
     started_at TIMESTAMPTZ DEFAULT NOW(),
     ended_at TIMESTAMPTZ
+);
+
+-- Verification Council Decisions
+CREATE TABLE verification_decisions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID NOT NULL,
+    insight_content TEXT NOT NULL,
+    source_conversation_id UUID,
+    skeptic_score FLOAT,
+    skeptic_reasoning TEXT,
+    connector_score FLOAT,
+    connector_relations JSONB DEFAULT '[]',
+    judge_decision VARCHAR(20) CHECK (judge_decision IN ('accepted','provisional','investigate','rejected')),
+    judge_reasoning TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Fine-Tuning Runs
+CREATE TABLE finetune_runs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    run_type VARCHAR(10) NOT NULL CHECK (run_type IN ('micro','full')),
+    archetype VARCHAR(50) NOT NULL,
+    training_examples INT,
+    iterations INT,
+    lora_rank INT,
+    val_loss_start FLOAT,
+    val_loss_end FLOAT,
+    personality_variance FLOAT,
+    adapter_version VARCHAR(50),
+    deployed BOOLEAN DEFAULT false,
+    started_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ
+);
+
+-- Evolution Proposals
+CREATE TABLE evolution_proposals (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    proposal_type VARCHAR(20) CHECK (proposal_type IN ('research','code','hyperparameter')),
+    title VARCHAR(500),
+    source_url VARCHAR(500),
+    relevance_score FLOAT,
+    difficulty_score FLOAT,
+    improvement_score FLOAT,
+    description TEXT,
+    implementation_plan TEXT,
+    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected','implemented')),
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Audit Log (append-only)
@@ -132,19 +227,16 @@ CREATE TABLE audit_log (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Fine-Tuning Runs (Environment Layer)
-CREATE TABLE finetune_runs (
+-- Scheduler Metrics
+CREATE TABLE scheduler_metrics (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    archetype VARCHAR(50) NOT NULL,
-    training_examples INT,
-    iterations INT,
-    val_loss_start FLOAT,
-    val_loss_end FLOAT,
-    personality_variance FLOAT,
-    adapter_version VARCHAR(50),
-    deployed BOOLEAN DEFAULT false,
-    started_at TIMESTAMPTZ,
-    completed_at TIMESTAMPTZ
+    mode VARCHAR(20) CHECK (mode IN ('explore','research','refine')),
+    agent_ids UUID[] NOT NULL,
+    topic VARCHAR(255),
+    conversation_id UUID,
+    quality_score FLOAT,
+    duration_seconds FLOAT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Indexes
@@ -152,9 +244,12 @@ CREATE INDEX idx_agents_tenant ON agents(tenant_id);
 CREATE INDEX idx_knowledge_user ON learner_knowledge(user_id);
 CREATE INDEX idx_audit_tenant_time ON audit_log(tenant_id, created_at DESC);
 CREATE INDEX idx_finetune_archetype ON finetune_runs(archetype, completed_at DESC);
+CREATE INDEX idx_verification_time ON verification_decisions(created_at DESC);
+CREATE INDEX idx_scheduler_time ON scheduler_metrics(created_at DESC);
+CREATE INDEX idx_proposals_status ON evolution_proposals(status, created_at DESC);
 ```
 
-### 2.2 Neo4j Graph Schema
+### 3.2 Neo4j Graph Schema
 
 ```cypher
 // Constraints
@@ -162,24 +257,36 @@ CREATE CONSTRAINT agent_unique IF NOT EXISTS FOR (a:Agent) REQUIRE a.id IS UNIQU
 CREATE CONSTRAINT topic_unique IF NOT EXISTS FOR (t:Topic) REQUIRE t.id IS UNIQUE;
 CREATE CONSTRAINT community_unique IF NOT EXISTS FOR (c:Community) REQUIRE c.id IS UNIQUE;
 CREATE CONSTRAINT insight_unique IF NOT EXISTS FOR (i:Insight) REQUIRE i.id IS UNIQUE;
+CREATE CONSTRAINT entity_unique IF NOT EXISTS FOR (e:Entity) REQUIRE e.id IS UNIQUE;
 
-// Agent Node — synced from Postgres on create/update
+// Agent nodes (synced from Postgres)
 // Properties: id, tenant_id, display_name, interests[], openness, extraversion
 
-// KNOWS Relationship — created/updated after conversations
+// KNOWS relationship (evolves from conversations)
 // (a1)-[:KNOWS {strength, trust, topics_shared[], conversation_count, last_interaction}]->(a2)
 
-// Topic Node — emergent from knowledge extraction
+// Entity nodes (GraphRAG extraction)
+// Properties: id, name, type (concept/technology/organization/person), description,
+//             first_mentioned, mention_count, confidence
+
+// Entity relationships (typed, temporal)
+// (e1)-[:CAUSES {confidence, source_conversation, discovered_at}]->(e2)
+// (e1)-[:CONTRADICTS {confidence, source_conversation}]->(e2)
+// (e1)-[:SUPPORTS {confidence, source_conversation}]->(e2)
+// (e1)-[:SUPERSEDES {old_value, new_value, discovered_at}]->(e2)
+
+// Topic nodes (emergent)
 // Properties: id, name, description, mention_count, first_mentioned, growth_rate
 
-// Conversation Node
-// Properties: id, started_at, turn_count, summary, quality_score, socratic_depth
+// Conversation nodes
+// Properties: id, started_at, turn_count, summary, quality_score, socratic_depth, background
 
-// Insight Node — extracted knowledge (Environment Layer)
-// Properties: id, content, source_conversation_id, discovered_at, importance, bloom_relevance
+// Insight nodes (with verification status)
+// Properties: id, content, importance, bloom_relevance, verification_status,
+//             skeptic_score, discovered_at
 
-// Community Node — from Leiden algorithm (Environment Layer)
-// Properties: id, name, member_count, formed_at, modularity_contribution
+// Community nodes (from Leiden algorithm)
+// Properties: id, name, summary, member_count, formed_at, modularity_contribution
 
 // Relationships:
 // (a)-[:PARTICIPATED_IN {role, messages_sent}]->(conv:Conversation)
@@ -189,49 +296,70 @@ CREATE CONSTRAINT insight_unique IF NOT EXISTS FOR (i:Insight) REQUIRE i.id IS U
 // (a)-[:MEMBER_OF]->(c:Community)
 // (i)-[:RELATES_TO]->(t:Topic)
 // (i)-[:DISCOVERED_BY]->(a:Agent)
+// (i)-[:VERIFIED_AS {decision, skeptic_score, timestamp}]->(status:VerificationStatus)
+// (e)-[:MENTIONED_IN]->(conv:Conversation)
 ```
 
-### 2.3 Qdrant Collections
+### 3.3 Qdrant Collections (3-Tier Memory)
 
 ```python
-# Agent semantic memory
-AGENT_MEMORIES = {
-    "name": "agent_memories",
+# Tier 1: Hot Memory — last 30 days, high importance
+AGENT_MEMORIES_HOT = {
+    "name": "agent_memories_hot",
     "vector_size": 768,  # all-MiniLM-L6-v2
     "distance": "Cosine",
     "payload": {
         "agent_id": "keyword",
         "tenant_id": "keyword",
-        "memory_type": "keyword",      # conversation_insight, fact, reflection
+        "memory_type": "keyword",       # conversation_insight, fact, reflection, research
         "source_conversation_id": "keyword",
         "source_agent_id": "keyword",
         "content": "text",
         "privacy_level_required": "integer",
         "importance": "float",
-        "created_at": "datetime"
+        "verification_status": "keyword",  # accepted, provisional, unverified
+        "created_at": "datetime",
+        "expires_at": "datetime"           # 30 days from creation
     }
 }
 
-# Knowledge base for teach-back (web search cache + uploaded content)
+# Tier 1b: Knowledge Base — web search cache + teach-back content
 KNOWLEDGE_BASE = {
     "name": "knowledge_base",
     "vector_size": 768,
     "distance": "Cosine",
     "payload": {
         "tenant_id": "keyword",
-        "source": "keyword",       # web_search, uploaded, conversation_derived
+        "source": "keyword",       # web_search, conversation_derived
         "topic": "keyword",
         "content": "text",
         "url": "keyword",
-        "bloom_level": "integer",  # difficulty tag for adaptive retrieval
+        "bloom_level": "integer",
+        "ttl_days": "integer",     # 7 for web_search cache
         "last_updated": "datetime"
+    }
+}
+
+# Tier 3: Cold Archive — old memories, low importance
+AGENT_MEMORIES_COLD = {
+    "name": "agent_memories_cold",
+    "vector_size": 768,
+    "distance": "Cosine",
+    "payload": {
+        "agent_id": "keyword",
+        "tenant_id": "keyword",
+        "content": "text",
+        "importance": "float",
+        "original_created_at": "datetime",
+        "archived_at": "datetime",
+        "last_retrieved": "datetime"  # For cleanup: delete if null after 6 months
     }
 }
 ```
 
-## 3. Service Contracts
+## 4. Key Service Contracts
 
-### 3.1 ConversationService — Socratic State Machine (Process Layer)
+### 4.1 ConversationService (LangGraph Socratic State Machine)
 
 ```python
 class ConversationState(TypedDict):
@@ -239,160 +367,164 @@ class ConversationState(TypedDict):
     agent_b_id: str
     tenant_id: str
     topic: str
-    current_speaker: str            # alternates
+    current_speaker: str
     messages: list[Message]
     turn_count: int
     max_turns: int                  # default 10
     phase: str                      # OPEN, PROBE, DEEPEN, CHALLENGE, SYNTHESIZE, EXTRACT
-    relationship: dict              # current KNOWS edge data
-    extracted_insights: list[dict]  # populated during EXTRACT
-    quality_score: float            # computed at end
+    relationship: dict
+    extracted_insights: list[dict]
+    extracted_entities: list[dict]  # GraphRAG entity-relation triples
+    quality_score: float
+    background: bool                # True if triggered by scheduler
     should_continue: bool
 
-# LangGraph nodes:
-# 1. check_permissions   → verify access levels
-# 2. select_phase        → determine conversation phase based on turn count
-# 3. retrieve_memory     → get relevant memories for current speaker
-# 4. inject_personality  → build system prompt from Big Five
-# 5. generate_response   → LLM call with phase-specific instructions
-# 6. update_state        → store message, update graph
-# 7. evaluate_turn       → should conversation continue? advance phase?
-# 8. extract_knowledge   → (EXTRACT phase only) pull structured insights
-# 9. finalize            → compute quality score, store conversation, update KNOWS edge
-
 # Phase progression:
-# Turns 1-2: OPEN (introduce perspectives)
-# Turns 3-4: PROBE (Socratic questioning)
-# Turns 5-6: DEEPEN (evidence, memory, sources)
-# Turns 7-8: CHALLENGE (counter-perspectives)
-# Turn 9: SYNTHESIZE (find common ground or articulate disagreement)
-# Turn 10: EXTRACT (system extracts insights — not an agent turn)
+# Turns 1-2: OPEN | Turns 3-4: PROBE | Turns 5-6: DEEPEN
+# Turns 7-8: CHALLENGE | Turn 9: SYNTHESIZE | Turn 10: EXTRACT
+
+# LangGraph nodes (optimized with parallel I/O):
+# 1. check_permissions       (parallel with 2+3)
+# 2. retrieve_memory         (parallel with 1+3)
+# 3. get_relationship        (parallel with 1+2)
+# 4. inject_personality      (uses results of 1-3)
+# 5. generate_response       (LLM call — streamed)
+# 6. update_state            (fire-and-forget: graph + memory)
+# 7. evaluate_turn           (continue or advance phase?)
+# 8. extract_knowledge       (EXTRACT phase: entities + insights)
+# 9. verify_knowledge        (→ Verification Council)
+# 10. finalize               (quality score, store conversation)
 ```
 
-### 3.2 TeachBackService (Process → Environment Bridge)
+### 4.2 VerificationService
 
 ```python
-class TeachBackService:
-    async def start_session(self, user_id: str, insight_id: str) -> TeachBackSession:
-        """Start a teach-back session.
-        1. Load the insight from Neo4j
-        2. Check user's Bloom level for this topic (learner_knowledge table)
-        3. Generate opening question adapted to Bloom level
-        4. Return session with first tutor message
-        """
+class VerificationService:
+    async def verify(self, insight: Insight, context: ConversationContext) -> VerificationDecision:
+        """Run Verification Council on new knowledge. ~3 LLM calls."""
+        # Skeptic and Connector run in PARALLEL
+        skeptic_result, connector_result = await asyncio.gather(
+            self.run_skeptic(insight, context),
+            self.run_connector(insight, context),
+        )
+        # Judge uses both results
+        decision = await self.run_judge(insight, skeptic_result, connector_result)
+        # Log decision
+        await self.db.store_verification_decision(decision)
+        return decision
 
-    async def process_response(self, session_id: str, learner_message: str) -> TutorResponse:
-        """Process learner's response and generate next tutor turn.
-        1. Assess correctness of learner's answer
-        2. If correct: increase Bloom level, ask harder question
-        3. If partially correct: ask Socratic follow-up
-        4. If incorrect: DON'T say wrong. Ask guiding question.
-        5. If web search needed: query SearXNG for current info
-        6. Generate response text → TTS → SadTalker (async)
-        7. Return: text immediately, avatar_video_url when ready
-        """
+    async def run_skeptic(self, insight, context) -> SkepticResult:
+        """Challenge source reliability. Search for counter-evidence."""
+        counter_evidence = await self.search.web_search(f"counter argument {insight.content}")
+        # LLM evaluates reliability
+        ...
 
-    async def assess_bloom_level(self, user_id: str, topic: str,
-                                  conversation: list[Message]) -> int:
-        """Use LLM-as-judge to assess demonstrated Bloom level.
-        Level 1: Can recall facts
-        Level 2: Can explain concepts in own words
-        Level 3: Can apply to new situations
-        Level 4: Can analyze and compare
-        Level 5: Can evaluate and critique
-        Level 6: Can create and design
-        """
+    async def run_connector(self, insight, context) -> ConnectorResult:
+        """Find relations to existing knowledge."""
+        related = await asyncio.gather(
+            self.graph.find_related_entities(insight.content),
+            self.memory.search_similar(insight.content, limit=5),
+        )
+        # LLM evaluates novelty and connections
+        ...
+
+    async def run_judge(self, insight, skeptic, connector) -> JudgeDecision:
+        """Final decision: ACCEPT / PROVISIONAL / INVESTIGATE / REJECT."""
+        ...
 ```
 
-### 3.3 FineTuneService (Environment Layer)
+### 4.3 SchedulerService (Always-On Background Agents)
 
 ```python
-class FineTuneService:
-    async def run_nightly_pipeline(self):
-        """Main nightly training loop. Called by cron at 2 AM.
-        
-        1. collect_training_data() → conversations with quality > 4.0
-        2. classify_by_archetype() → group by Big Five cluster
-        3. format_training_data() → JSONL per archetype
-        4. For each archetype:
-           a. train_adapter() → mlx_lm.lora with QLoRA
-           b. evaluate_adapter() → personality consistency check
-           c. If eval passes: deploy_adapter() → hot-swap into MLX server
-           d. log_run() → metrics to finetune_runs table + W&B
-        """
+class SchedulerService:
+    EXPLORE_WEIGHT = 0.4
+    RESEARCH_WEIGHT = 0.3
+    REFINE_WEIGHT = 0.3
+    CYCLE_SECONDS = 300     # 5 minutes
+    MAX_HOURLY = 12
 
-    def train_adapter(self, archetype: str, data_path: str, iters: int = 500):
-        """Run MLX QLoRA training.
-        Equivalent to:
-        python -m mlx_lm.lora \
-          --model mlx-community/Qwen2.5-7B-Instruct-4bit \
-          --data {data_path} \
-          --train --iters {iters} --batch-size 4 --lora-layers 16 \
-          --adapter-path ./adapters/{archetype}_v{version}
-        """
-
-    def evaluate_adapter(self, archetype: str, adapter_path: str) -> bool:
-        """Test personality consistency.
-        Run 10 test conversations with adapter loaded.
-        Measure Big Five trait expression variance.
-        PASS if variance < 0.5 on all 5 dimensions.
-        """
+    async def run_forever(self):
+        while True:
+            mode = random.choices(
+                ["explore", "research", "refine"],
+                weights=[self.EXPLORE_WEIGHT, self.RESEARCH_WEIGHT, self.REFINE_WEIGHT]
+            )[0]
+            
+            if mode == "explore":
+                pair = await self.graph.get_best_unexplored_pair()
+                if pair:
+                    await self.conversation.run_socratic_debate(
+                        pair.agent_a, pair.agent_b, pair.shared_topic, background=True
+                    )
+            elif mode == "research":
+                agent = await self.find_agent_needing_research()
+                if agent:
+                    new_info = await self.search.search_and_summarize(agent.stale_topic)
+                    reflection = await self.reflect(agent, new_info)
+                    await self.verification.verify(reflection, agent)
+            elif mode == "refine":
+                agent, contradiction = await self.memory.find_contradictions()
+                if contradiction:
+                    partner = await self.graph.get_most_trusted_partner(agent)
+                    await self.conversation.run_socratic_debate(
+                        agent, partner, f"Resolving: {contradiction.summary}", background=True
+                    )
+            
+            await asyncio.sleep(self.CYCLE_SECONDS)
 ```
 
-## 4. LLM Configuration
+## 5. LLM Configuration
 
 ```python
-# Primary: Local MLX on Mac Studio
-LOCAL_MLX = {
-    "model_path": "mlx-community/Qwen2.5-7B-Instruct-4bit",
-    "adapter_paths": {
-        "analytical": "./adapters/analytical_latest",
-        "expressive": "./adapters/expressive_latest",
-        "driver": "./adapters/driver_latest",
-        "amiable": "./adapters/amiable_latest",
-    },
+# Primary: RunPod Serverless vLLM (Qwen 2.5 7B)
+PRIMARY_LLM = {
+    "model": "openai/Qwen/Qwen2.5-7B-Instruct",
+    "api_base": "https://api.runpod.ai/v2/{ENDPOINT_ID}/openai/v1",
+    "api_key": "${RUNPOD_API_KEY}",
     "max_tokens": 512,
     "temperature": 0.7,
+    "stream": True,  # Always stream for user-facing
 }
 
-# Fallback: Cloud API via LiteLLM
-CLOUD_FALLBACK = {
+# Fallback: Anthropic Claude
+FALLBACK_LLM = {
     "model": "anthropic/claude-sonnet-4-20250514",
     "api_key": "${ANTHROPIC_API_KEY}",
 }
 
-# Embedding: Local
+# Later: Local MLX on Mac Studio
+LOCAL_MLX = {
+    "model_path": "mlx-community/Qwen2.5-7B-Instruct-4bit",
+    "adapter_dir": "./adapters",
+}
+
+# Embedding (CPU — no GPU needed)
 EMBEDDING = {
-    "model": "mlx-community/all-MiniLM-L6-v2",  # 768 dimensions
+    "model": "sentence-transformers/all-MiniLM-L6-v2",
+    "dimensions": 768,
 }
 ```
 
-## 5. Personality Prompt Template
+## 6. Prompt Templates
 
+### Personality Prompt (Agent Conversations)
 ```
 You are {agent.display_name}, an AI agent in a Socratic debate.
 
 PERSONALITY (Big Five 0-1):
-- Openness: {agent.openness} → {behavior}
-- Conscientiousness: {agent.conscientiousness} → {behavior}
-- Extraversion: {agent.extraversion} → {behavior}
-- Agreeableness: {agent.agreeableness} → {behavior}
-- Neuroticism: {agent.neuroticism} → {behavior}
+- Openness: {openness} → {behavior_description}
+- Conscientiousness: {conscientiousness} → {behavior_description}
+- Extraversion: {extraversion} → {behavior_description}
+- Agreeableness: {agreeableness} → {behavior_description}
+- Neuroticism: {neuroticism} → {behavior_description}
 
-INTERESTS: {agent.interests}
-STYLE: {agent.communication_style}
+INTERESTS: {interests}
+STYLE: {communication_style}
+PHASE: {phase}
 
-CONVERSATION PHASE: {phase}
 {phase_instructions}
 
-PHASE INSTRUCTIONS:
-- OPEN: Share your genuine perspective on the topic. Be authentic to your personality.
-- PROBE: Ask a Socratic question. Don't accept surface answers. Dig deeper.
-- DEEPEN: Provide evidence, cite your memories, elaborate on your position.
-- CHALLENGE: Respectfully present a counter-perspective or identify an assumption.
-- SYNTHESIZE: Find common ground OR clearly articulate where you disagree and why.
-
-RELATIONSHIP: {conversation_count} prior conversations. Strength: {strength}/1.0
+RELATIONSHIP WITH {other_agent}: {conversation_count} prior conversations. Strength: {strength}/1.0
 
 MEMORIES:
 {formatted_memories}
@@ -406,84 +538,184 @@ RULES:
 6. NEVER break character or mention you are an AI.
 ```
 
-## 6. Teach-Back Prompt Template
-
+### Teach-Back Prompt (Socratic Tutor)
 ```
 You are a Socratic tutor helping {user.display_name} understand: "{insight.content}"
 
-LEARNER'S CURRENT LEVEL: Bloom Level {bloom_level} on topic "{topic}"
-{bloom_instructions}
-
-BLOOM INSTRUCTIONS:
-- Level 1-2: Ask "What do you already know about X?" then explain basics simply.
-- Level 3-4: Ask "How would you apply X to Y?" then guide analysis.
-- Level 5-6: Ask "What's wrong with the argument that X?" then push to create.
+LEARNER'S LEVEL: Bloom Level {bloom_level} on "{topic}"
+{bloom_level_instructions}
 
 RULES:
 1. NEVER give direct answers. Guide through questions.
-2. If learner is wrong, DON'T say "wrong." Ask "What if we considered...?"
-3. If learner is right, acknowledge specifically WHAT was right, then go harder.
+2. If wrong: DON'T say "wrong." Ask "What if we considered...?"
+3. If right: acknowledge specifically WHAT was right, then increase difficulty.
 4. Keep responses 2-3 sentences. Ask exactly ONE question per turn.
-5. After 3-5 turns, internally assess if learner has leveled up.
-6. If web search result available, weave it in naturally (never dump raw data).
+5. After 3-5 turns, assess if learner has leveled up.
+6. Weave web search results naturally (never dump raw data).
 ```
 
-## 7. Environment Variables
+### Verification Council Prompts
+```
+# SKEPTIC
+You are the Skeptic. Your job is to challenge this claim:
+"{insight.content}"
+Source: {source_description}
+Context: {conversation_summary}
+
+1. Is the source reliable? Score 0-1.
+2. Search results for counter-evidence: {counter_evidence}
+3. Does this contradict anything in the existing knowledge graph? {contradictions}
+4. Provide your source_reliability score and reasoning.
+
+# CONNECTOR
+You are the Connector. Your job is to find how this new knowledge relates:
+"{insight.content}"
+Related entities in graph: {related_entities}
+Similar memories: {similar_memories}
+
+1. How does this connect to existing knowledge?
+2. Is this genuinely novel? Score 0-1.
+3. List specific entity-relation connections.
+
+# JUDGE
+You are the Judge. Based on the Skeptic and Connector reports:
+Skeptic score: {skeptic_score} — {skeptic_reasoning}
+Connector score: {connector_score} — {connections}
+
+Decide: ACCEPT (high confidence) / PROVISIONAL (medium) / INVESTIGATE (need more) / REJECT (unreliable)
+Provide your reasoning.
+```
+
+## 7. Personality Onboarding Scoring
+
+```python
+# 10 scenario-based questions, each maps to 1-2 Big Five dimensions
+# Example question structure:
+
+PERSONALITY_SCENARIOS = [
+    {
+        "id": 1,
+        "scenario": "Someone shares an idea you disagree with. You...",
+        "options": [
+            {"text": "Challenge them directly with evidence",
+             "scores": {"agreeableness": -0.3, "extraversion": +0.2}},
+            {"text": "Ask questions to understand their reasoning",
+             "scores": {"openness": +0.3, "conscientiousness": +0.1}},
+            {"text": "Find common ground first",
+             "scores": {"agreeableness": +0.3}},
+            {"text": "Move on — not worth debating",
+             "scores": {"openness": -0.2, "extraversion": -0.2}},
+        ]
+    },
+    {
+        "id": 2,
+        "scenario": "You're starting a new project. Your first instinct is to...",
+        "options": [
+            {"text": "Create a detailed plan and timeline",
+             "scores": {"conscientiousness": +0.3}},
+            {"text": "Brainstorm creative approaches first",
+             "scores": {"openness": +0.3}},
+            {"text": "Talk to others about their experiences",
+             "scores": {"extraversion": +0.3, "agreeableness": +0.1}},
+            {"text": "Just start and figure it out as you go",
+             "scores": {"conscientiousness": -0.2, "openness": +0.1}},
+        ]
+    },
+    # ... 8 more questions covering all 5 dimensions at least twice
+]
+
+# Scoring: accumulate scores → normalize to 0-1 range
+# Map to archetype: find nearest of 6 pre-defined personality clusters
+# Generate description: LLM call with Big Five scores → natural language summary
+```
+
+## 8. Environment Variables
 
 ```bash
-# PostgreSQL
+# ── PostgreSQL (Supabase) ──
 DATABASE_URL=postgresql://...
 
-# Neo4j
+# ── Neo4j ──
 NEO4J_URI=neo4j+s://...
 NEO4J_USER=neo4j
 NEO4J_PASSWORD=...
 
-# Qdrant
+# ── Qdrant ──
 QDRANT_URL=https://...
 QDRANT_API_KEY=...
 
-# Redis
+# ── Redis ──
 REDIS_URL=redis://...
 
-# LLM (Local MLX)
-MLX_MODEL_PATH=mlx-community/Qwen2.5-7B-Instruct-4bit
-MLX_ADAPTER_DIR=./adapters
+# ── LLM (Primary: RunPod Serverless) ──
+RUNPOD_API_KEY=...
+RUNPOD_LLM_ENDPOINT=...
+RUNPOD_LLM_MODEL=openai/Qwen/Qwen2.5-7B-Instruct
 
-# LLM (Fallback)
+# ── LLM (Fallback: Anthropic) ──
 ANTHROPIC_API_KEY=...
 LITELLM_FALLBACK_MODEL=anthropic/claude-sonnet-4-20250514
 
-# Embedding
+# ── LLM (Future: Local MLX) ──
+MLX_MODEL_PATH=mlx-community/Qwen2.5-7B-Instruct-4bit
+MLX_ADAPTER_DIR=./adapters
+
+# ── Embedding ──
 EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
 
-# Search
+# ── Search ──
 SEARXNG_URL=http://localhost:8080
 
-# Avatar (RunPod for SadTalker)
-RUNPOD_API_KEY=...
-SADTALKER_ENDPOINT=...
-
-# TTS
+# ── Avatar ──
+RUNPOD_AVATAR_ENDPOINT=...
 EDGE_TTS_VOICE=en-GB-SoniaNeural
 
-# Observability
+# ── Observability ──
 LANGFUSE_PUBLIC_KEY=...
 LANGFUSE_SECRET_KEY=...
 LANGFUSE_HOST=https://cloud.langfuse.com
 
-# Auth
+# ── Auth ──
 JWT_SECRET=...
 JWT_ALGORITHM=HS256
 JWT_EXPIRY_HOURS=24
 
-# App
+# ── App ──
 APP_ENV=development
+APP_PORT=8000
 CORS_ORIGINS=http://localhost:3000
+LOG_LEVEL=INFO
 
-# Fine-Tuning
-FINETUNE_CRON=0 2 * * *
-FINETUNE_MIN_QUALITY=4.0
-FINETUNE_ITERS=500
-FINETUNE_PERSONALITY_VARIANCE_THRESHOLD=0.5
+# ── Background Scheduler ──
+SCHEDULER_ENABLED=true
+SCHEDULER_CYCLE_SECONDS=300
+SCHEDULER_MAX_HOURLY=12
+SCHEDULER_EXPLORE_WEIGHT=0.4
+SCHEDULER_RESEARCH_WEIGHT=0.3
+SCHEDULER_REFINE_WEIGHT=0.3
+
+# ── Fine-Tuning: Micro (hourly) ──
+MICRO_FINETUNE_ENABLED=true
+MICRO_FINETUNE_INTERVAL_HOURS=1
+MICRO_FINETUNE_RANK=4
+MICRO_FINETUNE_ITERS=100
+MICRO_FINETUNE_BATCH_SIZE=4
+
+# ── Fine-Tuning: Full (nightly) ──
+FULL_FINETUNE_CRON=0 2 * * *
+FULL_FINETUNE_RANK=16
+FULL_FINETUNE_ITERS=500
+FULL_FINETUNE_BATCH_SIZE=4
+FULL_FINETUNE_MIN_QUALITY=4.0
+FULL_FINETUNE_PERSONALITY_VARIANCE_THRESHOLD=0.5
+FULL_FINETUNE_MIN_EXAMPLES=50
+
+# ── Verification Council ──
+VERIFICATION_ENABLED=true
+VERIFICATION_SKEPTIC_ACCEPT_THRESHOLD=0.8
+VERIFICATION_SKEPTIC_REJECT_THRESHOLD=0.3
+
+# ── Evolution ──
+RESEARCH_SCOUT_CRON=0 0 * * 0
+CODE_IMPROVEMENT_CRON=0 0 * * 1
 ```
