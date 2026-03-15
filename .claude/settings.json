@@ -33,7 +33,8 @@
       "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJiZjNiZmZhYS1mOTZlLTRhMDAtOTQxMi02MDNmNjllMzA0ZWIiLCJ0ZW5hbnRfaWQiOiIxM2ExM2YwYy01MGE3LTRmZTktOWU4MS1kMmUwMzQ5NTI1YTYiLCJleHAiOjE3NzM2ODkzOTF9.y3m0XStQ0GdhbFkvNks_LbecK0EhUjEpbnOkUwkrxDI\")",
       "Bash(__NEW_LINE_cac9fc83daf11c49__ echo:*)",
       "Bash(curl -s -w \"\\\\nHTTP: %{http_code}\\\\n\" -H \"Authorization: Bearer $TOKEN\" http://localhost:8000/api/v1/agents)",
-      "Bash(curl -s -w \"\\\\nHTTP: %{http_code}\\\\n\" -H \"Authorization: Bearer $TOKEN\" http://localhost:8000/api/v1/scheduler/status)"
+      "Bash(curl -s -w \"\\\\nHTTP: %{http_code}\\\\n\" -H \"Authorization: Bearer $TOKEN\" http://localhost:8000/api/v1/scheduler/status)",
+      "Bash(uv run:*)"
     ]
   }
 }

@@ -102,9 +102,9 @@ async def get_agent(agent_id: str, tenant_id: str) -> AgentResponse | None:
 
 
 async def list_agents(tenant_id: str) -> list[AgentResponse]:
-    """List all agents in a tenant."""
+    """List all agents in a tenant, plus mock agents from any tenant."""
     rows = await postgres.fetch(
-        "SELECT * FROM agents WHERE tenant_id = $1 ORDER BY created_at",
+        "SELECT * FROM agents WHERE tenant_id = $1 OR is_mock = true ORDER BY is_mock, created_at",
         uuid.UUID(tenant_id),
     )
     return [_row_to_response(r) for r in rows]
