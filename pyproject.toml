@@ -1,0 +1,60 @@
+[project]
+name = "nexusmind"
+version = "0.1.0"
+description = "Self-learning collective intelligence platform"
+requires-python = ">=3.12"
+dependencies = [
+    # Web framework
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.6.0",
+    "email-validator>=2.2.0",
+    # Database
+    "asyncpg>=0.30.0",
+    "neo4j>=5.26.0",
+    "qdrant-client>=1.12.0",
+    "redis>=5.2.0",
+    # Auth
+    "python-jose[cryptography]>=3.3.0",
+    "bcrypt>=4.2.0",
+    # LLM
+    "litellm>=1.52.0",
+    "langfuse>=2.54.0",
+    "sentence-transformers>=3.3.0",
+    # Agent orchestration
+    "langgraph>=0.2.0",
+    # Background tasks
+    "apscheduler>=3.10.0",
+    # Logging
+    "structlog>=24.4.0",
+    # HTTP client
+    "httpx>=0.28.0",
+    # Alembic
+    "alembic>=1.14.0",
+    "sqlalchemy>=2.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "httpx>=0.28.0",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true

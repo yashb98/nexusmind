@@ -1,0 +1,70 @@
+"""FastAPI application entrypoint with lifespan management."""
+
+import asyncio
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
+import structlog
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from src.config import settings
+from src.db import neo4j_client, postgres, qdrant_client, redis_client
+from src.routes.auth import router as auth_router
+from src.utils.logging import setup_logging
+
+logger = structlog.get_logger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Connect all databases on startup, disconnect on shutdown."""
+    setup_logging()
+    logger.info("starting_nexusmind", env=settings.app.env)
+
+    # Connect all databases in parallel
+    await asyncio.gather(
+        postgres.connect(),
+        neo4j_client.connect(),
+        qdrant_client.connect(),
+        redis_client.connect(),
+    )
+    logger.info("all_databases_connected")
+
+    yield
+
+    # Disconnect all databases in parallel
+    await asyncio.gather(
+        postgres.disconnect(),
+        neo4j_client.disconnect(),
+        qdrant_client.disconnect(),
+        redis_client.disconnect(),
+    )
+    logger.info("all_databases_disconnected")
+
+
+app = FastAPI(
+    title="NexusMind",
+    description="Self-learning collective intelligence platform",
+    version="0.1.0",
+    lifespan=lifespan,
+)
+
+# CORS
+origins = [o.strip() for o in settings.cors.cors_origins.split(",")]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Routers
+app.include_router(auth_router)
+
+
+@app.get("/health")
+async def health() -> dict:
+    """Health check endpoint."""
+    return {"status": "ok"}

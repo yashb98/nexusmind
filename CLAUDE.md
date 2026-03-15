@@ -162,5 +162,5 @@ uv run python scripts/seed_demo.py
 
 ## Build Order
 Complete ALL tasks in current phase before moving to next.
-After each phase: run ALL tests, commit, tag.
+After each phase: run ALL tests, and ask to commit, tag.
 Phase 1 → 2 → 3 → 4 → 5 → 6. No skipping.
