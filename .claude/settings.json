@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx create-next-app@latest frontend --typescript --tailwind --app --eslint --no-src-dir --import-alias \"@/*\" --use-npm)",
+      "Bash(npx create-next-app@latest frontend --typescript --tailwind --app --eslint --no-src-dir --import-alias \"@/*\" --use-npm --yes)",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(wc -l /Users/yashbishnoi/Downloads/nexusmind/frontend/components/panels/*.tsx)",
+      "Bash(grep -n \"interface.*Props\" frontend/components/panels/*.tsx)",
+      "Bash(npx tsc:*)",
+      "Bash(UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/ -x -q)",
+      "Bash(UV_CACHE_DIR=/tmp/uv-cache uv run ruff check src/ tests/ scripts/ training/)",
+      "WebFetch(domain:localhost)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8000/api/v1/agents)",
+      "Bash(curl -s http://localhost:8000/api/v1/agents)",
+      "Bash(python3 -m json.tool)",
+      "Bash(lsof -i :8000 -sTCP:LISTEN)",
+      "Bash(lsof -i :3000 -sTCP:LISTEN)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/dashboard)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/login)",
+      "Bash(curl -s http://localhost:3000/dashboard)",
+      "Bash(curl -s -o /dev/null -w \"time_total: %{time_total}s, http_code: %{http_code}\" http://localhost:3000/login)",
+      "Bash(curl -s -o /dev/null -w \"time_total: %{time_total}s, http_code: %{http_code}\" http://localhost:3000/dashboard)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(k,v\\) for k,v in {**d.get\\(''''dependencies'''',{}\\), **d.get\\(''''devDependencies'''',{}\\)}.items\\(\\)]\")",
+      "Bash(curl -s -o /dev/null -w \"time_total: %{time_total}s\" http://localhost:3000/login)",
+      "Bash(curl -s -o /dev/null -w \"time_total: %{time_total}s\" http://localhost:3000/dashboard)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/onboarding)",
+      "Bash(curl -s -o /dev/null -w \"status: %{http_code}, time: %{time_total}s\\\\n\" http://localhost:3000/login)",
+      "Bash(curl -s -o /dev/null -w \"status: %{http_code}, time: %{time_total}s\\\\n\" http://localhost:3000/dashboard)",
+      "Bash(curl -s -o /dev/null -w \"status: %{http_code}, time: %{time_total}s\\\\n\" http://localhost:3000/onboarding)",
+      "Bash(curl -s -w \"\\\\nHTTP Status: %{http_code}\\\\n\" http://localhost:8000/api/v1/agents)",
+      "Bash(curl -s -X POST http://localhost:8000/api/v1/auth/register -H \"Content-Type: application/json\" -d '{\"\"email\"\":\"\"test2@test.com\"\",\"\"display_name\"\":\"\"Test\"\",\"\"password\"\":\"\"testtest123\"\"}')",
+      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJiZjNiZmZhYS1mOTZlLTRhMDAtOTQxMi02MDNmNjllMzA0ZWIiLCJ0ZW5hbnRfaWQiOiIxM2ExM2YwYy01MGE3LTRmZTktOWU4MS1kMmUwMzQ5NTI1YTYiLCJleHAiOjE3NzM2ODkzOTF9.y3m0XStQ0GdhbFkvNks_LbecK0EhUjEpbnOkUwkrxDI\")",
+      "Bash(__NEW_LINE_cac9fc83daf11c49__ echo:*)",
+      "Bash(curl -s -w \"\\\\nHTTP: %{http_code}\\\\n\" -H \"Authorization: Bearer $TOKEN\" http://localhost:8000/api/v1/agents)",
+      "Bash(curl -s -w \"\\\\nHTTP: %{http_code}\\\\n\" -H \"Authorization: Bearer $TOKEN\" http://localhost:8000/api/v1/scheduler/status)"
+    ]
+  }
+}
