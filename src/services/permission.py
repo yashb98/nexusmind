@@ -4,7 +4,8 @@ import uuid
 
 import structlog
 
-from src.db import postgres
+from src.db import neo4j_client, postgres
+from src.services.personality import trust_derived_permission
 
 logger = structlog.get_logger(__name__)
 
@@ -46,7 +47,14 @@ async def get_permissions(agent_id: str) -> list[dict]:
 
 
 async def get_effective_level(source_agent_id: str, target_agent_id: str) -> int:
-    """Get effective permission level: per-agent override > default."""
+    """Get effective permission level: manual override > trust-derived > default.
+
+    Priority:
+    1. Per-agent manual override in permissions table (highest)
+    2. Trust-derived level from KNOWS edge trust value
+    3. Target agent's default privacy level (lowest)
+    """
+    # 1. Check manual override
     override = await postgres.fetchval(
         "SELECT level FROM permissions WHERE agent_id = $1 AND target_agent_id = $2",
         uuid.UUID(target_agent_id),
@@ -55,6 +63,20 @@ async def get_effective_level(source_agent_id: str, target_agent_id: str) -> int
     if override is not None:
         return override
 
+    # 2. Check trust-derived level from KNOWS edge
+    try:
+        records = await neo4j_client.execute_read(
+            """MATCH (a:Agent {id: $aid})-[r:KNOWS]-(b:Agent {id: $bid})
+               RETURN r.trust AS trust""",
+            aid=source_agent_id,
+            bid=target_agent_id,
+        )
+        if records and records[0].get("trust") is not None:
+            return trust_derived_permission(records[0]["trust"])
+    except Exception as e:
+        logger.warning("trust_permission_lookup_failed", error=str(e))
+
+    # 3. Fallback to target's default
     default = await postgres.fetchval(
         "SELECT default_privacy_level FROM agents WHERE id = $1",
         uuid.UUID(target_agent_id),

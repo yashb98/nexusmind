@@ -2,7 +2,7 @@
 > Claude: Update this file as you work. This persists across sessions.
 
 ## Current State
-- Migration step: STEP 3 COMPLETE (conversation modes)
+- Migration step: STEP 4 COMPLETE (trust-adaptive personality)
 - Last session: 2026-03-16
 - Branch: main
 
@@ -36,7 +36,7 @@
 1. ~~Fix critical bugs~~ DONE
 2. ~~Adaptive onboarding~~ DONE
 3. ~~Conversation modes~~ DONE
-4. Trust-adaptive personality (context/TRUST_ADAPTIVE.md)
+4. ~~Trust-adaptive personality~~ DONE
 5. Embedded tutor (context/EMBEDDED_TUTOR.md)
 6. Profile section (context/PROFILE_SECTION.md)
 7. Social layer — groups, events, feed (context/SOCIAL_LAYER.md)

@@ -339,6 +339,10 @@ async def _inject_personality(
         neuroticism=agent["neuroticism"],
     )
 
+    # Resolve domain modifiers for the conversation topic
+    agent_domain_mods = agent.get("domain_modifiers") or {}
+    topic_domain_mods = _resolve_topic_domain_mods(state["topic"], agent.get("interests", []), agent_domain_mods)
+
     state["system_prompt"] = generate_system_prompt(
         agent_name=agent["display_name"],
         scores=scores,
@@ -348,6 +352,7 @@ async def _inject_personality(
         other_agent_name=other_agent["display_name"],
         relationship=state["relationship"] or None,
         memories=state["memories"] or None,
+        domain_modifiers=topic_domain_mods,
     )
 
     mode = state.get("mode", "socratic")
@@ -453,6 +458,27 @@ async def _extract_and_finalize(state: ConversationState) -> ConversationState:
         10.0, state["turn_count"] * 0.8 + len(state["extracted_insights"]) * 1.5
     )
 
+    # Update trust based on conversation quality
+    try:
+        trust_delta = 0.0
+        mode = state.get("mode", "socratic")
+        if state["quality_score"] > 3.5:
+            trust_delta += 0.05
+        if state["extracted_insights"]:
+            trust_delta += 0.03
+        challenge_turns = [m for m in state["messages"] if m.get("phase") in ("CHALLENGE", "CHECK")]
+        if len(challenge_turns) >= 2:
+            trust_delta += 0.02
+        if mode == "play":
+            trust_delta += 0.08
+        if trust_delta > 0:
+            await graph_service.update_trust(
+                state["agent_a_id"], state["agent_b_id"], trust_delta
+            )
+            logger.info("trust_updated", delta=trust_delta, mode=mode)
+    except Exception as e:
+        logger.warning("trust_update_failed", error=str(e))
+
     # Store conversation in Neo4j
     try:
         await _store_conversation_node(state)
@@ -491,6 +517,19 @@ async def _store_conversation_node(state: ConversationState) -> None:
         a_id=state["agent_a_id"],
         b_id=state["agent_b_id"],
     )
+
+
+def _resolve_topic_domain_mods(
+    topic: str, interests: list[str], domain_modifiers: dict
+) -> dict[str, float] | None:
+    """Find domain modifiers matching the conversation topic."""
+    topic_lower = topic.lower()
+    for interest in interests:
+        if interest.lower() in topic_lower or topic_lower in interest.lower():
+            mods = domain_modifiers.get(interest)
+            if mods:
+                return mods
+    return None
 
 
 async def _get_agent_data(agent_id: str) -> dict | None:

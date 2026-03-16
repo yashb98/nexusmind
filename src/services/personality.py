@@ -445,10 +445,21 @@ def compute_trust_modifier(trust_level: float) -> float:
 def compute_effective_personality(
     base_big_five: dict[str, float],
     trust_level: float,
+    domain_modifiers: dict[str, float] | None = None,
 ) -> dict[str, float]:
-    """Apply trust modifier to base personality."""
+    """Triple-layer personality: base + domain + trust.
+
+    1. Start with base Big Five (from onboarding).
+    2. Apply domain modifier (per-interest adjustments, clamp to 0-1).
+    3. Multiply by trust modifier (0.3 for strangers → 1.0 for trusted).
+    """
     modifier = compute_trust_modifier(trust_level)
-    return {trait: value * modifier for trait, value in base_big_five.items()}
+    dm = domain_modifiers or {}
+    effective = {}
+    for trait, base_val in base_big_five.items():
+        domain_adj = max(0.0, min(1.0, base_val + dm.get(trait, 0.0)))
+        effective[trait] = domain_adj * modifier
+    return effective
 
 
 def get_trust_label(trust_level: float) -> str:
@@ -486,42 +497,82 @@ def generate_system_prompt(
     other_agent_name: str,
     relationship: dict | None = None,
     memories: list[str] | None = None,
+    domain_modifiers: dict[str, float] | None = None,
 ) -> str:
-    """Generate a personality-grounded system prompt for conversations."""
+    """Generate a personality-grounded system prompt with trust-adaptive expression."""
+    # Compute trust level from relationship
+    trust_level = (relationship or {}).get("trust", 0.2)
+    trust_label = get_trust_label(trust_level)
+
+    # Compute effective personality (base + domain + trust)
+    base = {
+        "openness": scores.openness,
+        "conscientiousness": scores.conscientiousness,
+        "extraversion": scores.extraversion,
+        "agreeableness": scores.agreeableness,
+        "neuroticism": scores.neuroticism,
+    }
+    effective = compute_effective_personality(base, trust_level, domain_modifiers)
+
     trait_lines = []
-    for trait_name, value in [
-        ("Openness", scores.openness),
-        ("Conscientiousness", scores.conscientiousness),
-        ("Extraversion", scores.extraversion),
-        ("Agreeableness", scores.agreeableness),
-        ("Neuroticism", scores.neuroticism),
+    for trait_name, base_val, eff_val in [
+        ("Openness", scores.openness, effective["openness"]),
+        ("Conscientiousness", scores.conscientiousness, effective["conscientiousness"]),
+        ("Extraversion", scores.extraversion, effective["extraversion"]),
+        ("Agreeableness", scores.agreeableness, effective["agreeableness"]),
+        ("Neuroticism", scores.neuroticism, effective["neuroticism"]),
     ]:
-        level = _trait_level(value)
-        desc_key = trait_name.lower()
-        desc = TRAIT_DESCRIPTIONS[desc_key][level]
-        trait_lines.append(f"- {trait_name}: {value:.2f} → {desc}")
+        level = _trait_level(eff_val)
+        desc = TRAIT_DESCRIPTIONS[trait_name.lower()][level]
+        trait_lines.append(f"- {trait_name}: base {base_val:.2f} | effective {eff_val:.2f} → {desc}")
 
     phase_instructions = _get_phase_instructions(phase)
     rel_str = _format_relationship(other_agent_name, relationship)
     mem_str = _format_memories(memories)
+    trust_str = _get_trust_instructions(trust_level, trust_label, other_agent_name)
 
     return (
-        f"You are {agent_name}, an AI agent in a Socratic debate.\n\n"
-        f"PERSONALITY (Big Five 0-1):\n"
+        f"You are {agent_name}, an AI agent in a conversation.\n\n"
+        f"PERSONALITY (Base Big Five 0-1, Trust-Adjusted for {other_agent_name}):\n"
         + "\n".join(trait_lines)
-        + f"\n\nINTERESTS: {', '.join(interests)}\n"
+        + f"\n\nTRUST LEVEL with {other_agent_name}: {trust_level:.2f}/1.0 ({trust_label})\n"
+        f"{trust_str}\n\n"
+        f"INTERESTS: {', '.join(interests)}\n"
         f"STYLE: {communication_style}\n"
         f"PHASE: {phase}\n\n"
         f"{phase_instructions}\n\n"
         f"{rel_str}\n\n"
         f"{mem_str}\n\n"
         "RULES:\n"
-        "1. Stay in character. Personality MUST be consistent.\n"
+        "1. Stay in character. Personality MUST be consistent with your effective traits.\n"
         "2. NEVER give a simple answer. Always probe, question, or challenge.\n"
         "3. Reference memories naturally (don't list them).\n"
         "4. Keep responses 2-4 sentences. Conversational, not formal.\n"
         "5. If you discover something new, express genuine curiosity.\n"
         "6. NEVER break character or mention you are an AI."
+    )
+
+
+def _get_trust_instructions(trust_level: float, trust_label: str, other_name: str) -> str:
+    """Get trust-specific behavior instructions for the prompt."""
+    if trust_level < 0.2:
+        return (
+            f"TRUST BEHAVIOR ({trust_label}): Be polite but guarded with {other_name}. "
+            "Share surface-level opinions only. Ask more than you reveal. Don't challenge strongly."
+        )
+    elif trust_level < 0.5:
+        return (
+            f"TRUST BEHAVIOR ({trust_label}): Share opinions on shared topics with {other_name}. "
+            "Light probing. Okay to mildly disagree."
+        )
+    elif trust_level < 0.8:
+        return (
+            f"TRUST BEHAVIOR ({trust_label}): Share genuine views with {other_name}. "
+            "Comfortable disagreeing. Reference deeper knowledge."
+        )
+    return (
+        f"TRUST BEHAVIOR ({trust_label}): Full authentic expression with {other_name}. "
+        "Challenge openly. Share personal experiences. Be intellectually honest even when uncomfortable."
     )
 
 
