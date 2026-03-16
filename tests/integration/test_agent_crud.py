@@ -73,6 +73,8 @@ class TestAgentCRUD:
             "lora_archetype": None,
             "default_privacy_level": 2,
             "avatar_image_url": None,
+            "default_trust_for_strangers": 0.2,
+            "is_mock": False,
             "status": "active",
         }
 
@@ -81,6 +83,7 @@ class TestAgentCRUD:
             patch("src.services.agent_service.neo4j_client") as mock_neo4j,
         ):
             mock_pg.fetchrow = AsyncMock(return_value=mock_row)
+            mock_pg.fetch = AsyncMock(return_value=[])  # no mock agents to auto-connect
             mock_neo4j.execute_write = AsyncMock()
 
             headers = {"Authorization": auth_headers["Authorization"]}

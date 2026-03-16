@@ -17,6 +17,7 @@ async def get_agent_network(agent_id: str, tenant_id: str, hops: int = 2) -> dic
     records = await neo4j_client.execute_read(
         """MATCH (a:Agent {id: $id})
            OPTIONAL MATCH (a)-[r:KNOWS]-(b:Agent)
+           WHERE b IS NOT NULL
            WITH a,
                 COLLECT(DISTINCT {
                     id: b.id,
@@ -24,21 +25,27 @@ async def get_agent_network(agent_id: str, tenant_id: str, hops: int = 2) -> dic
                     interests: b.interests,
                     openness: b.openness,
                     extraversion: b.extraversion,
+                    lora_archetype: b.lora_archetype,
+                    communication_style: b.communication_style,
                     is_mock: COALESCE(b.is_mock, false)
                 }) AS neighbors,
-                COLLECT(DISTINCT {
-                    source: startNode(r).id,
-                    target: endNode(r).id,
-                    strength: r.strength,
-                    trust: r.trust,
-                    conversation_count: r.conversation_count
-                }) AS edges
-           RETURN neighbors + [{
+                [x IN COLLECT(DISTINCT
+                    CASE WHEN r IS NOT NULL THEN {
+                        source: startNode(r).id,
+                        target: endNode(r).id,
+                        strength: r.strength,
+                        trust: r.trust,
+                        conversation_count: r.conversation_count
+                    } END
+                ) WHERE x IS NOT NULL] AS edges
+           RETURN [n IN neighbors WHERE n.id IS NOT NULL] + [{
                id: a.id,
                display_name: a.display_name,
                interests: a.interests,
                openness: a.openness,
                extraversion: a.extraversion,
+               lora_archetype: a.lora_archetype,
+               communication_style: a.communication_style,
                is_mock: COALESCE(a.is_mock, false)
            }] AS nodes, edges""",
         id=agent_id,

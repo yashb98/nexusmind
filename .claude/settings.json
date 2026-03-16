@@ -1,47 +1,83 @@
 {
+  "model": "opus",
   "permissions": {
     "allow": [
-      "Bash(npx create-next-app@latest frontend --typescript --tailwind --app --eslint --no-src-dir --import-alias \"@/*\" --use-npm)",
-      "Bash(npx create-next-app@latest frontend --typescript --tailwind --app --eslint --no-src-dir --import-alias \"@/*\" --use-npm --yes)",
-      "Bash(npm install:*)",
-      "Bash(npm run:*)",
-      "Bash(wc -l /Users/yashbishnoi/Downloads/nexusmind/frontend/components/panels/*.tsx)",
-      "Bash(grep -n \"interface.*Props\" frontend/components/panels/*.tsx)",
-      "Bash(npx tsc:*)",
-      "Bash(UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/ -x -q)",
-      "Bash(UV_CACHE_DIR=/tmp/uv-cache uv run ruff check src/ tests/ scripts/ training/)",
-      "WebFetch(domain:localhost)",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8000/api/v1/agents)",
-      "Bash(curl -s http://localhost:8000/api/v1/agents)",
-      "Bash(python3 -m json.tool)",
-      "Bash(lsof -i :8000 -sTCP:LISTEN)",
-      "Bash(lsof -i :3000 -sTCP:LISTEN)",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/dashboard)",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/login)",
-      "Bash(curl -s http://localhost:3000/dashboard)",
-      "Bash(curl -s -o /dev/null -w \"time_total: %{time_total}s, http_code: %{http_code}\" http://localhost:3000/login)",
-      "Bash(curl -s -o /dev/null -w \"time_total: %{time_total}s, http_code: %{http_code}\" http://localhost:3000/dashboard)",
-      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(k,v\\) for k,v in {**d.get\\(''''dependencies'''',{}\\), **d.get\\(''''devDependencies'''',{}\\)}.items\\(\\)]\")",
-      "Bash(curl -s -o /dev/null -w \"time_total: %{time_total}s\" http://localhost:3000/login)",
-      "Bash(curl -s -o /dev/null -w \"time_total: %{time_total}s\" http://localhost:3000/dashboard)",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/onboarding)",
-      "Bash(curl -s -o /dev/null -w \"status: %{http_code}, time: %{time_total}s\\\\n\" http://localhost:3000/login)",
-      "Bash(curl -s -o /dev/null -w \"status: %{http_code}, time: %{time_total}s\\\\n\" http://localhost:3000/dashboard)",
-      "Bash(curl -s -o /dev/null -w \"status: %{http_code}, time: %{time_total}s\\\\n\" http://localhost:3000/onboarding)",
-      "Bash(curl -s -w \"\\\\nHTTP Status: %{http_code}\\\\n\" http://localhost:8000/api/v1/agents)",
-      "Bash(curl -s -X POST http://localhost:8000/api/v1/auth/register -H \"Content-Type: application/json\" -d '{\"\"email\"\":\"\"test2@test.com\"\",\"\"display_name\"\":\"\"Test\"\",\"\"password\"\":\"\"testtest123\"\"}')",
-      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJiZjNiZmZhYS1mOTZlLTRhMDAtOTQxMi02MDNmNjllMzA0ZWIiLCJ0ZW5hbnRfaWQiOiIxM2ExM2YwYy01MGE3LTRmZTktOWU4MS1kMmUwMzQ5NTI1YTYiLCJleHAiOjE3NzM2ODkzOTF9.y3m0XStQ0GdhbFkvNks_LbecK0EhUjEpbnOkUwkrxDI\")",
-      "Bash(__NEW_LINE_cac9fc83daf11c49__ echo:*)",
-      "Bash(curl -s -w \"\\\\nHTTP: %{http_code}\\\\n\" -H \"Authorization: Bearer $TOKEN\" http://localhost:8000/api/v1/agents)",
-      "Bash(curl -s -w \"\\\\nHTTP: %{http_code}\\\\n\" -H \"Authorization: Bearer $TOKEN\" http://localhost:8000/api/v1/scheduler/status)",
-      "Bash(uv run:*)",
-      "Bash(curl -s -o /dev/null -w \"status: %{http_code}, time: %{time_total}s\" http://localhost:3000/login)",
-      "Bash(curl -s -o /dev/null -w \"status: %{http_code}, time: %{time_total}s\" http://localhost:3000/dashboard)",
-      "Bash(curl -s -w \"\\\\nHTTP: %{http_code}\" https://api.moonshot.cn/v1/chat/completions -H \"Content-Type: application/json\" -H \"Authorization: Bearer sk-kimi-FaWualbjQkewu5M1L4LgfjMdZIHhdbfSLRPs7S1gaegQ5fMYAWtxdLDASb1hO7tE\" -d '{\"\"model\"\":\"\"kimi-k2.5\"\",\"\"messages\"\":[{\"\"role\"\":\"\"user\"\",\"\"content\"\":\"\"Say hello in one sentence.\"\"}],\"\"max_tokens\"\":30}')",
-      "Bash(curl -s -w \"\\\\nHTTP: %{http_code}\" https://api.moonshot.ai/v1/chat/completions -H \"Content-Type: application/json\" -H \"Authorization: Bearer sk-kimi-FaWualbjQkewu5M1L4LgfjMdZIHhdbfSLRPs7S1gaegQ5fMYAWtxdLDASb1hO7tE\" -d '{\"\"model\"\":\"\"kimi-k2.5\"\",\"\"messages\"\":[{\"\"role\"\":\"\"user\"\",\"\"content\"\":\"\"Say hello in one sentence.\"\"}],\"\"max_tokens\"\":30}')",
-      "WebSearch",
-      "Bash(curl -s -w \"\\\\nHTTP: %{http_code}\" https://api.moonshot.ai/anthropic/v1/messages -H \"Content-Type: application/json\" -H \"x-api-key: sk-kimi-FaWualbjQkewu5M1L4LgfjMdZIHhdbfSLRPs7S1gaegQ5fMYAWtxdLDASb1hO7tE\" -d '{\"\"model\"\":\"\"kimi-k2.5\"\",\"\"max_tokens\"\":30,\"\"messages\"\":[{\"\"role\"\":\"\"user\"\",\"\"content\"\":\"\"Say hello in one sentence.\"\"}]}')",
-      "Bash(curl -s -o /dev/null -w \"status: %{http_code}\" http://localhost:3000/dashboard)"
+      "Read",
+      "Write",
+      "Edit",
+      "Bash(uv run *)",
+      "Bash(pytest *)",
+      "Bash(ruff *)",
+      "Bash(mypy *)",
+      "Bash(docker compose *)",
+      "Bash(curl *)",
+      "Bash(git *)",
+      "Bash(python *)",
+      "Bash(npm *)",
+      "Bash(npx *)",
+      "Bash(pnpm *)",
+      "Bash(node *)",
+      "Bash(cat *)",
+      "Bash(ls *)",
+      "Bash(find *)",
+      "Bash(grep *)",
+      "Bash(wc *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(mkdir *)",
+      "Bash(cp *)",
+      "Bash(mv *)"
+    ],
+    "deny": [
+      "Bash(rm -rf /)",
+      "Bash(rm -rf ~)",
+      "Bash(sudo *)",
+      "Bash(chmod 777 *)",
+      "Bash(*DROP TABLE*)",
+      "Bash(*DROP DATABASE*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if echo \"$CLAUDE_FILE_PATHS\" | grep -q '\\.py$'; then ruff check $CLAUDE_FILE_PATHS --fix --silent 2>/dev/null; ruff format $CLAUDE_FILE_PATHS --silent 2>/dev/null; fi"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if echo \"$CLAUDE_FILE_PATHS\" | grep -q '\\.py$'; then ruff check $CLAUDE_FILE_PATHS --fix --silent 2>/dev/null; ruff format $CLAUDE_FILE_PATHS --silent 2>/dev/null; fi"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .claude/hooks/block-dangerous.py"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .claude/hooks/update-scratchpad.py 2>/dev/null || true"
+          }
+        ]
+      }
     ]
   }
 }
