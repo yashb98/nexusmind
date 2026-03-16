@@ -152,6 +152,11 @@ async def stream_debate(
                 "side": "left" if speaker_id == req.agent_a_id else "right",
             })
 
+            # Generate tutor commentary for non-background conversations
+            tutor = await conv_service.generate_tutor_commentary(state)
+            if tutor:
+                yield _sse(tutor)
+
         # Finalize and send completion
         state = await conv_service._extract_and_finalize(state)
         yield _sse({

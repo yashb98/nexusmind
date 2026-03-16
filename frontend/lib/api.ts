@@ -84,6 +84,7 @@ export function streamConversation(
   onTurn: (turn: Record<string, unknown>) => void,
   onDone: (result: Record<string, unknown>) => void,
   onError: (err: string) => void,
+  onTutor?: (tutor: Record<string, unknown>) => void,
 ): () => void {
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
   const controller = new AbortController();
@@ -113,6 +114,7 @@ export function streamConversation(
             const event = JSON.parse(dataLine);
             if (event.type === "meta") onMeta(event);
             else if (event.type === "turn") onTurn(event);
+            else if (event.type === "tutor" && onTutor) onTutor(event);
             else if (event.type === "done") onDone(event);
           } catch { /* ignore */ }
         }

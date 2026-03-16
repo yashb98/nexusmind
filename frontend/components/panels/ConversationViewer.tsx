@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { CheckCircle } from "lucide-react";
+import TutorSidePanel, { TutorMessage } from "./TutorSidePanel";
 
 type Phase = "OPEN" | "PROBE" | "DEEPEN" | "CHALLENGE" | "SYNTHESIZE" | "EXTRACT";
 
@@ -25,6 +26,7 @@ interface ConversationViewerProps {
   insights?: Insight[];
   qualityScore?: number;
   mode?: string;
+  tutorMessages?: TutorMessage[];
 }
 
 const MODE_LABELS: Record<string, { label: string; icon: string }> = {
@@ -130,8 +132,10 @@ export default function ConversationViewer({
   insights,
   qualityScore,
   mode,
+  tutorMessages,
 }: ConversationViewerProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const hasTutor = tutorMessages && tutorMessages.length > 0;
 
   // Auto-scroll to latest message
   useEffect(() => {
@@ -157,37 +161,49 @@ export default function ConversationViewer({
         )}
       </div>
 
-      {/* Messages */}
-      <div
-        ref={scrollRef}
-        className="flex flex-col gap-3 max-h-[500px] overflow-y-auto pr-1 scroll-smooth"
-      >
-        {messages.map((msg) => (
+      {/* Debate + Tutor split layout */}
+      <div className={`flex ${hasTutor ? "gap-0" : ""}`}>
+        {/* Debate messages column */}
+        <div className={hasTutor ? "w-[60%] min-w-0" : "w-full"}>
           <div
-            key={msg.id}
-            className={`flex flex-col gap-1 max-w-[85%] animate-in fade-in slide-in-from-bottom-2 duration-300 ${
-              msg.side === "right" ? "self-end items-end" : "self-start items-start"
-            }`}
+            ref={scrollRef}
+            className="flex flex-col gap-3 max-h-[500px] overflow-y-auto pr-1 scroll-smooth"
           >
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-slate-300">{msg.speaker}</span>
-              <span
-                className={`rounded-full border px-2 py-px text-[10px] font-semibold uppercase ${PHASE_STYLES[msg.phase] || PHASE_STYLES.OPEN}`}
+            {messages.map((msg) => (
+              <div
+                key={msg.id}
+                className={`flex flex-col gap-1 max-w-[85%] animate-in fade-in slide-in-from-bottom-2 duration-300 ${
+                  msg.side === "right" ? "self-end items-end" : "self-start items-start"
+                }`}
               >
-                {msg.phase}
-              </span>
-            </div>
-            <div
-              className={`rounded-lg px-3.5 py-2.5 text-sm leading-relaxed ${
-                msg.side === "right"
-                  ? "bg-indigo-600/20 text-slate-200 border border-indigo-500/30"
-                  : "bg-slate-800 text-slate-300 border border-slate-700"
-              }`}
-            >
-              {renderContent(msg.content)}
-            </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-slate-300">{msg.speaker}</span>
+                  <span
+                    className={`rounded-full border px-2 py-px text-[10px] font-semibold uppercase ${PHASE_STYLES[msg.phase] || PHASE_STYLES.OPEN}`}
+                  >
+                    {msg.phase}
+                  </span>
+                </div>
+                <div
+                  className={`rounded-lg px-3.5 py-2.5 text-sm leading-relaxed ${
+                    msg.side === "right"
+                      ? "bg-indigo-600/20 text-slate-200 border border-indigo-500/30"
+                      : "bg-slate-800 text-slate-300 border border-slate-700"
+                  }`}
+                >
+                  {renderContent(msg.content)}
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
+        </div>
+
+        {/* Tutor side panel — appears when tutor messages arrive */}
+        {hasTutor && (
+          <div className="w-[40%] min-w-0 max-h-[500px]">
+            <TutorSidePanel messages={tutorMessages} />
+          </div>
+        )}
       </div>
 
       {/* Insights */}

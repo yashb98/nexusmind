@@ -173,6 +173,7 @@ export default function DashboardPage() {
   const [liveMessages, setLiveMessages] = useState<{ id: string; speaker: string; content: string; phase: string; side: "left" | "right" }[]>([]);
   const [convResult, setConvResult] = useState<{ quality_score: number; insights: { content: string; importance: number }[] } | null>(null);
   const [conversationLoading, setConversationLoading] = useState(false);
+  const [tutorMessages, setTutorMessages] = useState<{mode: string; content: string; turn: number}[]>([]);
 
   useEffect(() => {
     if (!_hydrated) return;
@@ -255,6 +256,7 @@ export default function DashboardPage() {
       if (!myAgentId) return;
       setShowPicker(false);
       setLiveMessages([]);
+      setTutorMessages([]);
       setConvMeta(null);
       setConvResult(null);
       setConvMode(mode);
@@ -295,6 +297,17 @@ export default function DashboardPage() {
         (err) => {
           console.error("Stream error:", err);
           setConversationLoading(false);
+        },
+        // onTutor — append tutor commentary as it arrives
+        (tutor) => {
+          setTutorMessages((prev) => [
+            ...prev,
+            {
+              mode: tutor.mode as string,
+              content: tutor.content as string,
+              turn: tutor.turn as number,
+            },
+          ]);
         },
       );
     },
@@ -461,6 +474,7 @@ export default function DashboardPage() {
                       insights={!conversationLoading ? (convInsights as any) : []}
                       qualityScore={convResult?.quality_score}
                       mode={convMeta?.mode || convMode}
+                      tutorMessages={tutorMessages.length > 0 ? tutorMessages : undefined}
                     />
                   </>
                 )}

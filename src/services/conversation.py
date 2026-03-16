@@ -428,6 +428,82 @@ def _evaluate_turn(state: ConversationState) -> ConversationState:
     return state
 
 
+# ---------------------------------------------------------------------------
+# Embedded tutor commentary
+# ---------------------------------------------------------------------------
+
+TUTOR_PROMPT_TEMPLATE = """You are a Socratic tutor helping a learner understand a live debate about "{topic}".
+
+LATEST MESSAGE: "{latest_message}" — said during {phase} phase
+
+YOUR MODE: {tutor_mode}
+
+MODE INSTRUCTIONS:
+- explain: The agent used a concept the learner may not know. Explain it simply in 1-2 sentences. Then ask ONE question to check understanding.
+- check: A debatable point was raised. Ask the learner what THEY think about it. Don't explain — test their reasoning.
+- reflect: The debate is wrapping up. Ask the learner for their own position on the topic. Push them to synthesize what they heard.
+- observe: Nothing requires intervention. Give a brief 1-sentence note about what's happening in the debate.
+
+RULES:
+1. Keep it SHORT. 1-3 sentences max. The debate is the main show — you're the commentary.
+2. NEVER spoil what's coming in the debate. Only comment on what already happened.
+3. NEVER say "wrong." If learner is incorrect, ask a guiding question.
+4. Be warm and encouraging. Use casual tone."""
+
+
+def _select_tutor_mode(phase: str, turn_count: int, total_turns: int) -> str:
+    """Select tutor mode based on conversation phase and progress."""
+    if phase in ("SYNTHESIZE", "EXTRACT", "INSIGHT", "REFLECT", "DELIVER"):
+        return "reflect"
+    if phase in ("CHALLENGE", "PROBE", "CHECK"):
+        return "check"
+    if turn_count <= 2:
+        return "explain"
+    # Default to observe for most turns to avoid being annoying
+    return "observe" if turn_count % 3 != 0 else "explain"
+
+
+async def generate_tutor_commentary(state: ConversationState) -> dict | None:
+    """Generate tutor commentary for the latest turn.
+
+    Returns None for background conversations.
+    """
+    if state.get("background", True):
+        return None
+
+    if not state["messages"]:
+        return None
+
+    latest = state["messages"][-1]
+    mode = _select_tutor_mode(
+        state["phase"], state["turn_count"], state["max_turns"],
+    )
+
+    prompt = TUTOR_PROMPT_TEMPLATE.format(
+        topic=state["topic"],
+        latest_message=latest["content"][:500],
+        phase=state["phase"],
+        tutor_mode=mode,
+    )
+
+    try:
+        tutor_response = await llm_service.generate(
+            system_prompt=prompt,
+            messages=[],
+            trace_id=f"{state['conversation_id']}-tutor-{state['turn_count']}",
+            temperature=0.6,
+        )
+        return {
+            "type": "tutor",
+            "mode": mode,
+            "content": tutor_response,
+            "turn": state["turn_count"],
+        }
+    except Exception as e:
+        logger.warning("tutor_generation_failed", error=str(e))
+        return None
+
+
 async def _extract_and_finalize(state: ConversationState) -> ConversationState:
     """Extract knowledge and finalize the conversation."""
     if len(state["messages"]) < 2:
