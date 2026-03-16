@@ -2,7 +2,7 @@
 > Claude: Update this file as you work. This persists across sessions.
 
 ## Current State
-- Migration step: STEP 6 COMPLETE (profile section)
+- Migration step: STEP 7 COMPLETE (social layer)
 - Last session: 2026-03-16
 - Branch: main
 
@@ -39,7 +39,7 @@
 4. ~~Trust-adaptive personality~~ DONE
 5. ~~Embedded tutor~~ DONE
 6. ~~Profile section~~ DONE
-7. Social layer — groups, events, feed (context/SOCIAL_LAYER.md)
+7. ~~Social layer~~ DONE
 8. Mock agents + connections (context/MOCK_AGENTS_CONNECTIONS.md)
 
 ## Discoveries

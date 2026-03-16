@@ -15,8 +15,12 @@ from src.routes.auth import router as auth_router
 from src.routes.connections import router as connections_router
 from src.routes.avatar import router as avatar_router
 from src.routes.conversations import router as conversations_router
+from src.routes.discover import router as discover_router
+from src.routes.events import router as events_router
 from src.routes.evolution import router as evolution_router
+from src.routes.feed import router as feed_router
 from src.routes.graph import router as graph_router
+from src.routes.groups import router as groups_router
 from src.routes.insights import router as insights_router
 from src.routes.onboarding import router as onboarding_router
 from src.routes.permissions import router as permissions_router
@@ -86,6 +90,10 @@ app.include_router(teachback_router)
 app.include_router(avatar_router)
 app.include_router(scheduler_router)
 app.include_router(evolution_router)
+app.include_router(groups_router)
+app.include_router(events_router)
+app.include_router(feed_router)
+app.include_router(discover_router)
 
 
 @app.get("/health")

@@ -173,4 +173,27 @@ export const getLearningProgress = (agentId: string) =>
 // Avatar
 export const getAvatarPresets = () => api.get("/api/v1/avatar/presets");
 
+// Groups
+export const createGroup = (data: Record<string, unknown>) => api.post("/api/v1/groups", data);
+export const listGroups = () => api.get("/api/v1/groups");
+export const discoverGroups = () => api.get("/api/v1/groups/discover");
+export const getGroup = (id: string) => api.get(`/api/v1/groups/${id}`);
+export const joinGroup = (id: string) => api.post(`/api/v1/groups/${id}/join`);
+export const leaveGroup = (id: string) => api.post(`/api/v1/groups/${id}/leave`);
+
+// Events
+export const createEvent = (data: Record<string, unknown>) => api.post("/api/v1/events", data);
+export const listEvents = (status?: string) => api.get(`/api/v1/events${status ? `?status=${status}` : ""}`);
+export const getEvent = (id: string) => api.get(`/api/v1/events/${id}`);
+export const joinEvent = (id: string) => api.post(`/api/v1/events/${id}/join`);
+
+// Feed
+export const getFeed = (limit = 50) => api.get(`/api/v1/feed?limit=${limit}`);
+export const getUnreadCount = () => api.get("/api/v1/feed/unread");
+export const markFeedRead = (id: string) => api.patch(`/api/v1/feed/${id}/read`);
+
+// Discovery
+export const discoverAgents = () => api.get("/api/v1/discover/agents");
+export const discoverEvents = () => api.get("/api/v1/discover/events");
+
 export default api;

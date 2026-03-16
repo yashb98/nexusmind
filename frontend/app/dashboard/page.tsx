@@ -19,12 +19,14 @@ import InsightsFeed from "@/components/panels/InsightsFeed";
 import TeachBackPanel from "@/components/panels/TeachBackPanel";
 import PrivacyDashboard from "@/components/panels/PrivacyDashboard";
 import EvolutionDashboard from "@/components/panels/EvolutionDashboard";
+import FeedPanel from "@/components/panels/FeedPanel";
 
 const GraphView = dynamic(() => import("@/components/graph/GraphView"), {
   ssr: false,
 });
 
 const TABS = [
+  { id: "feed", label: "Feed" },
   { id: "agent", label: "Agent" },
   { id: "conversation", label: "Conversation" },
   { id: "insights", label: "Insights" },
@@ -415,6 +417,9 @@ export default function DashboardPage() {
 
           {/* Panel content */}
           <div className="flex-1 overflow-y-auto p-4">
+            {/* Feed panel */}
+            {activePanel === "feed" && <FeedPanel />}
+
             {/* Agent panel */}
             {activePanel === "agent" && selectedAgent && (
               <AgentPanel

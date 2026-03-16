@@ -25,7 +25,12 @@
       "Bash(tail *)",
       "Bash(mkdir *)",
       "Bash(cp *)",
-      "Bash(mv *)"
+      "Bash(mv *)",
+      "Bash(for f:*)",
+      "Bash(do)",
+      "Bash(echo \"=== $f ===\")",
+      "Read(//private/tmp/claude-501/-Users-yashbishnoi-Downloads-nexusmind/449ead50-9a87-4f47-a036-c7a656c07967/tasks/**)",
+      "Bash(done)"
     ],
     "deny": [
       "Bash(rm -rf /)",

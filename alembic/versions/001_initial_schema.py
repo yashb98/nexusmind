@@ -245,8 +245,99 @@ def upgrade() -> None:
     op.create_index("idx_scheduler_time", "scheduler_metrics", [sa.text("created_at DESC")])
     op.create_index("idx_proposals_status", "evolution_proposals", ["status", sa.text("created_at DESC")])
 
+    # ── Social Layer ──────────────────────────────────────────────────
+
+    # Groups
+    op.create_table(
+        "groups",
+        sa.Column("id", sa.UUID, primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column("tenant_id", sa.UUID, sa.ForeignKey("tenants.id"), nullable=False),
+        sa.Column("name", sa.String(255), nullable=False),
+        sa.Column("description", sa.Text, nullable=True),
+        sa.Column("group_type", sa.String(20), nullable=True),
+        sa.Column("created_by", sa.UUID, sa.ForeignKey("users.id"), nullable=False),
+        sa.Column("max_members", sa.Integer, server_default="20"),
+        sa.Column("is_public", sa.Boolean, server_default="true"),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+    )
+
+    op.create_table(
+        "group_members",
+        sa.Column("id", sa.UUID, primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column("group_id", sa.UUID, sa.ForeignKey("groups.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("agent_id", sa.UUID, sa.ForeignKey("agents.id"), nullable=False),
+        sa.Column("role", sa.String(20), server_default="member"),
+        sa.Column("joined_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.UniqueConstraint("group_id", "agent_id"),
+    )
+    op.create_index("idx_group_members_group", "group_members", ["group_id"])
+    op.create_index("idx_group_members_agent", "group_members", ["agent_id"])
+
+    # Events
+    op.create_table(
+        "events",
+        sa.Column("id", sa.UUID, primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column("tenant_id", sa.UUID, sa.ForeignKey("tenants.id"), nullable=False),
+        sa.Column("name", sa.String(255), nullable=False),
+        sa.Column("description", sa.Text, nullable=True),
+        sa.Column("event_type", sa.String(20), nullable=True),
+        sa.Column("created_by", sa.UUID, sa.ForeignKey("users.id"), nullable=False),
+        sa.Column("group_id", sa.UUID, sa.ForeignKey("groups.id"), nullable=True),
+        sa.Column("status", sa.String(20), server_default="upcoming"),
+        sa.Column("max_participants", sa.Integer, server_default="20"),
+        sa.Column("starts_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("ends_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("rules", sa.JSON, server_default="{}"),
+        sa.Column("results", sa.JSON, server_default="{}"),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+    )
+    op.create_index("idx_events_status", "events", ["status", "starts_at"])
+
+    op.create_table(
+        "event_participants",
+        sa.Column("id", sa.UUID, primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column("event_id", sa.UUID, sa.ForeignKey("events.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("agent_id", sa.UUID, sa.ForeignKey("agents.id"), nullable=False),
+        sa.Column("team_id", sa.UUID, nullable=True),
+        sa.Column("role", sa.String(20), server_default="participant"),
+        sa.Column("joined_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.UniqueConstraint("event_id", "agent_id"),
+    )
+    op.create_index("idx_event_participants", "event_participants", ["event_id"])
+
+    op.create_table(
+        "event_teams",
+        sa.Column("id", sa.UUID, primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column("event_id", sa.UUID, sa.ForeignKey("events.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("name", sa.String(255), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+    )
+
+    # Feed
+    op.create_table(
+        "feed_items",
+        sa.Column("id", sa.UUID, primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column("user_id", sa.UUID, sa.ForeignKey("users.id"), nullable=False),
+        sa.Column("item_type", sa.String(30), nullable=False),
+        sa.Column("title", sa.String(500), nullable=False),
+        sa.Column("description", sa.Text, nullable=True),
+        sa.Column("related_agent_ids", sa.ARRAY(sa.UUID), server_default="{}"),
+        sa.Column("related_conversation_id", sa.UUID, nullable=True),
+        sa.Column("related_group_id", sa.UUID, nullable=True),
+        sa.Column("related_event_id", sa.UUID, nullable=True),
+        sa.Column("read", sa.Boolean, server_default="false"),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+    )
+    op.create_index("idx_feed_user_time", "feed_items", ["user_id", sa.text("created_at DESC")])
+
 
 def downgrade() -> None:
+    op.drop_table("feed_items")
+    op.drop_table("event_teams")
+    op.drop_table("event_participants")
+    op.drop_table("events")
+    op.drop_table("group_members")
+    op.drop_table("groups")
     op.drop_table("notification_preferences")
     op.drop_table("scheduler_metrics")
     op.drop_table("audit_log")
