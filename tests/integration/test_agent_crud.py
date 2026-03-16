@@ -78,6 +78,9 @@ class TestAgentCRUD:
             "domain_modifiers": {},
             "personality_confidence": 0.7,
             "questions_answered": 0,
+            "tutor_voice": "en-GB-SoniaNeural",
+            "tutor_avatar_url": None,
+            "tutor_mode_preference": "active",
             "status": "active",
         }
 

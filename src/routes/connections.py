@@ -70,3 +70,59 @@ async def list_connections(
     return await connection_service.list_connections(
         agent_id, current_user["tenant_id"]
     )
+
+
+@router.get("/{agent_id}/detail")
+async def get_connections_detail(
+    agent_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Get detailed connection info with trust levels and permissions."""
+    from src.db import neo4j_client
+    from src.services.personality import get_trust_label, trust_derived_permission
+
+    records = await neo4j_client.execute_read(
+        """MATCH (a:Agent {id: $id})-[r:KNOWS]-(b:Agent)
+           RETURN b.id AS id, b.display_name AS display_name,
+                  b.lora_archetype AS archetype, b.is_mock AS is_mock,
+                  r.trust AS trust, r.conversation_count AS conversation_count,
+                  r.strength AS strength""",
+        id=agent_id,
+    )
+
+    connections = []
+    for rec in records:
+        trust = rec.get("trust", 0.2) or 0.2
+        connections.append({
+            "id": rec["id"],
+            "display_name": rec["display_name"],
+            "archetype": rec.get("archetype"),
+            "is_mock": rec.get("is_mock", False),
+            "trust": trust,
+            "trust_label": get_trust_label(trust),
+            "auto_permission": trust_derived_permission(trust),
+            "conversation_count": rec.get("conversation_count", 0),
+            "strength": rec.get("strength", 0),
+        })
+
+    return connections
+
+
+@router.patch("/{agent_id}/connections/{target_id}")
+async def update_connection(
+    agent_id: str,
+    target_id: str,
+    body: dict,
+    current_user: dict = Depends(get_current_user),
+):
+    """Set manual permission override for a specific connection."""
+    from src.db import neo4j_client
+
+    override = body.get("manual_permission_override")
+    if override is not None:
+        await neo4j_client.execute_write(
+            """MATCH (a:Agent {id: $aid})-[r:KNOWS]-(b:Agent {id: $bid})
+               SET r.manual_permission_override = $override""",
+            aid=agent_id, bid=target_id, override=override,
+        )
+    return {"status": "updated"}

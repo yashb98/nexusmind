@@ -5,7 +5,15 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, X, Plus, Trash2 } from "lucide-react";
 import { useStore } from "@/lib/store";
-import { getMe, updateMe, getAgent, updateAgent } from "@/lib/api";
+import {
+  getMe,
+  updateMe,
+  getAgent,
+  updateAgent,
+  getConnectionsDetail,
+  updateConnectionOverride,
+  getLearningProgress,
+} from "@/lib/api";
 import {
   Radar,
   RadarChart,
@@ -38,6 +46,24 @@ interface AgentInfo {
   neuroticism: number;
   lora_archetype: string | null;
   [key: string]: unknown;
+}
+
+interface ConnectionDetail {
+  id: string;
+  display_name: string;
+  trust: number;
+  trust_label: string;
+  auto_permission: number;
+  manual_override: number | null;
+}
+
+interface LearningTopic {
+  topic: string;
+  bloom_level: number;
+}
+
+interface LearningProgressData {
+  topics: LearningTopic[];
 }
 
 const COMM_STYLES = ["analytical", "expressive", "driver", "amiable"];
@@ -95,6 +121,16 @@ export default function ProfilePage() {
   // Delete confirmation
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
+  // Privacy & Trust state
+  const [trustDefault, setTrustDefault] = useState(0.2);
+  const [connections, setConnections] = useState<ConnectionDetail[]>([]);
+
+  // Tutor state
+  const [tutorMode, setTutorMode] = useState<string>("active");
+
+  // Learning progress state
+  const [learningProgress, setLearningProgress] = useState<LearningProgressData>({ topics: [] });
+
   // Auth guard
   useEffect(() => {
     if (!_hydrated) return;
@@ -123,6 +159,21 @@ export default function ProfilePage() {
         setCommStyle(a.communication_style);
         setPrivacyLevel(a.default_privacy_level);
         setInterests([...a.interests]);
+        if (a.default_trust_for_strangers != null) {
+          setTrustDefault(a.default_trust_for_strangers as number);
+        }
+
+        // Fetch connections and learning progress in parallel
+        const [connResp, progressResp] = await Promise.allSettled([
+          getConnectionsDetail(a.id),
+          getLearningProgress(a.id),
+        ]);
+        if (connResp.status === "fulfilled") {
+          setConnections(connResp.value.data as ConnectionDetail[]);
+        }
+        if (progressResp.status === "fulfilled") {
+          setLearningProgress(progressResp.value.data as LearningProgressData);
+        }
       }
     } catch (err) {
       console.error("Failed to load profile:", err);
@@ -185,6 +236,19 @@ export default function ProfilePage() {
   const handleLogout = () => {
     logout();
     router.replace("/login");
+  };
+
+  const handleOverride = async (targetId: string, value: string) => {
+    if (!agent) return;
+    const override = value === "" ? null : parseInt(value, 10);
+    try {
+      await updateConnectionOverride(agent.id, targetId, override);
+      setConnections((prev) =>
+        prev.map((c) => (c.id === targetId ? { ...c, manual_override: override } : c)),
+      );
+    } catch (err) {
+      console.error("Failed to update override:", err);
+    }
   };
 
   // ─── Loading / Guard ───────────────────────────────────────────────────────
@@ -453,7 +517,142 @@ export default function ProfilePage() {
           </section>
         )}
 
-        {/* ─── Section 4: Account Actions ───────────────────────────────── */}
+        {/* ─── Section 4: Privacy & Trust ─────────────────────────────────── */}
+        {agent && (
+          <section className="rounded-xl border border-gray-800 bg-gray-900 p-6">
+            <h3 className="text-lg font-semibold text-gray-100 mb-4">Privacy &amp; Trust</h3>
+
+            {/* Default trust slider */}
+            <div className="mb-4">
+              <label className="text-sm text-gray-400">Default Trust for New Connections</label>
+              <input
+                type="range"
+                min="0.1"
+                max="0.5"
+                step="0.05"
+                value={trustDefault}
+                onChange={(e) => setTrustDefault(parseFloat(e.target.value))}
+                className="w-full mt-2"
+              />
+              <span className="text-xs text-gray-500">{trustDefault}</span>
+            </div>
+
+            {/* Per-connection overrides table */}
+            <h4 className="text-sm font-medium text-gray-300 mt-6 mb-2">Connection Overrides</h4>
+            {connections.length === 0 ? (
+              <p className="text-sm text-gray-500">No connections yet.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-gray-500 border-b border-gray-800">
+                      <th className="text-left py-2">Agent</th>
+                      <th className="text-left py-2">Trust</th>
+                      <th className="text-left py-2">Auto Permission</th>
+                      <th className="text-left py-2">Override</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {connections.map((conn) => (
+                      <tr key={conn.id} className="border-b border-gray-800/50">
+                        <td className="py-2 text-gray-200">{conn.display_name}</td>
+                        <td className="py-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-16 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-purple-500 rounded-full"
+                                style={{ width: `${conn.trust * 100}%` }}
+                              />
+                            </div>
+                            <span className="text-xs text-gray-400">{conn.trust_label}</span>
+                          </div>
+                        </td>
+                        <td className="py-2 text-gray-400">Level {conn.auto_permission}</td>
+                        <td className="py-2">
+                          <select
+                            className="bg-gray-800 text-gray-300 text-xs rounded px-2 py-1 border border-gray-700"
+                            value={conn.manual_override ?? ""}
+                            onChange={(e) => handleOverride(conn.id, e.target.value)}
+                          >
+                            <option value="">Auto</option>
+                            {[0, 1, 2, 3, 4, 5].map((l) => (
+                              <option key={l} value={l}>
+                                Level {l}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* ─── Section 5: Tutor Settings ──────────────────────────────────── */}
+        <section className="rounded-xl border border-gray-800 bg-gray-900 p-6">
+          <h3 className="text-lg font-semibold text-gray-100 mb-4">Tutor Settings</h3>
+
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm text-gray-400 mb-2 block">
+                Tutor Mode During Conversations
+              </label>
+              <div className="flex gap-3">
+                {["active", "passive", "off"].map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => setTutorMode(mode)}
+                    className={`px-4 py-2 rounded-lg text-sm capitalize ${
+                      tutorMode === mode
+                        ? "bg-purple-600 text-white"
+                        : "bg-gray-800 text-gray-400 border border-gray-700"
+                    }`}
+                  >
+                    {mode}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                {tutorMode === "active"
+                  ? "Explains concepts and asks questions"
+                  : tutorMode === "passive"
+                    ? "Brief notes only, no questions"
+                    : "No tutor during live debates"}
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* ─── Section 6: Learning Progress ───────────────────────────────── */}
+        <section className="rounded-xl border border-gray-800 bg-gray-900 p-6">
+          <h3 className="text-lg font-semibold text-gray-100 mb-4">Learning Progress</h3>
+
+          {learningProgress.topics.length === 0 ? (
+            <p className="text-sm text-gray-500">
+              Complete conversations and teach-me sessions to track your learning progress.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {learningProgress.topics.map((topic) => (
+                <div key={topic.topic} className="flex items-center gap-3">
+                  <span className="text-sm text-gray-300 w-40 truncate">{topic.topic}</span>
+                  <div className="flex-1 h-2 bg-gray-800 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-emerald-500 rounded-full"
+                      style={{ width: `${(topic.bloom_level / 6) * 100}%` }}
+                    />
+                  </div>
+                  <span className="text-xs text-gray-500">Level {topic.bloom_level}/6</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* ─── Section 7: Account Actions ─────────────────────────────────── */}
         <section className="rounded-xl border border-gray-800 bg-gray-900 p-6">
           <h2 className="text-base font-semibold text-slate-100 mb-4">
             Account
@@ -465,6 +664,13 @@ export default function ProfilePage() {
             >
               Log Out
             </button>
+          </div>
+        </section>
+
+        {/* ─── Section 8: Danger Zone ─────────────────────────────────────── */}
+        <section className="rounded-xl border border-red-900/50 bg-gray-900 p-6">
+          <h3 className="text-lg font-semibold text-red-400 mb-4">Danger Zone</h3>
+          <div className="flex flex-col gap-3">
             {!showDeleteConfirm ? (
               <button
                 onClick={() => setShowDeleteConfirm(true)}

@@ -53,3 +53,32 @@ async def delete_agent(agent_id: str, current_user: dict = Depends(get_current_u
     deleted = await agent_service.delete_agent(agent_id, current_user["tenant_id"])
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
+
+
+@router.post("/{agent_id}/retake-quiz")
+async def retake_quiz(
+    agent_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Clear personality scores to allow re-onboarding."""
+    await agent_service.update_agent(agent_id, current_user["tenant_id"], {
+        "openness": 0.5, "conscientiousness": 0.5, "extraversion": 0.5,
+        "agreeableness": 0.5, "neuroticism": 0.5,
+        "personality_confidence": 0.0, "questions_answered": 0,
+        "domain_modifiers": {},
+    })
+    return {"status": "reset", "redirect": "/onboarding?step=2"}
+
+
+@router.get("/{agent_id}/learning-progress")
+async def get_learning_progress(
+    agent_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Get learning progress for the agent's owner."""
+    # For now return a placeholder since learner_knowledge table may not exist yet
+    return {
+        "topics": [],
+        "total_sessions": 0,
+        "average_bloom": 0,
+    }

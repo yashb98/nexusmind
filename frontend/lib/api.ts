@@ -154,6 +154,22 @@ export const getProposals = () => api.get("/api/v1/evolution/proposals");
 export const getFinetuneHistory = () => api.get("/api/v1/evolution/finetune/history");
 export const getEvolutionMetrics = () => api.get("/api/v1/evolution/metrics");
 
+// Connections
+export const getConnectionsDetail = (agentId: string) =>
+  api.get(`/api/v1/connections/${agentId}/detail`);
+export const updateConnectionOverride = (
+  agentId: string,
+  targetId: string,
+  override: number | null,
+) =>
+  api.patch(`/api/v1/connections/${agentId}/connections/${targetId}`, {
+    manual_permission_override: override,
+  });
+
+// Learning Progress
+export const getLearningProgress = (agentId: string) =>
+  api.get(`/api/v1/agents/${agentId}/learning-progress`);
+
 // Avatar
 export const getAvatarPresets = () => api.get("/api/v1/avatar/presets");
 

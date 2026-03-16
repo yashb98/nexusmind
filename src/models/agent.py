@@ -22,6 +22,9 @@ class AgentCreate(BaseModel):
     domain_modifiers: dict = {}
     personality_confidence: float = 0.7
     questions_answered: int = 0
+    tutor_voice: str = "en-GB-SoniaNeural"
+    tutor_avatar_url: str | None = None
+    tutor_mode_preference: str = "active"
 
 
 class AgentUpdate(BaseModel):
@@ -56,4 +59,7 @@ class AgentResponse(BaseModel):
     domain_modifiers: dict = {}
     personality_confidence: float = 0.7
     questions_answered: int = 0
+    tutor_voice: str = "en-GB-SoniaNeural"
+    tutor_avatar_url: str | None = None
+    tutor_mode_preference: str = "active"
     status: str

@@ -63,6 +63,9 @@ def upgrade() -> None:
         sa.Column("personality_confidence", sa.Float, server_default="0.7"),
         sa.Column("questions_answered", sa.Integer, server_default="0"),
         sa.Column("status", sa.String(20), server_default="active"),
+        sa.Column("tutor_voice", sa.String(100), server_default="en-GB-SoniaNeural"),
+        sa.Column("tutor_avatar_url", sa.String(500), nullable=True),
+        sa.Column("tutor_mode_preference", sa.String(20), server_default="active"),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()")),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()")),
         sa.CheckConstraint("openness BETWEEN 0 AND 1", name="ck_agents_openness"),
@@ -222,6 +225,17 @@ def upgrade() -> None:
         sa.CheckConstraint("mode IN ('explore','research','refine')", name="ck_scheduler_mode"),
     )
 
+    # 12. notification_preferences
+    op.create_table(
+        "notification_preferences",
+        sa.Column("user_id", UUID, sa.ForeignKey("users.id"), primary_key=True),
+        sa.Column("new_insights", sa.Boolean, server_default="true"),
+        sa.Column("connection_requests", sa.Boolean, server_default="true"),
+        sa.Column("community_alerts", sa.Boolean, server_default="true"),
+        sa.Column("daily_summaries", sa.Boolean, server_default="false"),
+        sa.Column("weekly_reports", sa.Boolean, server_default="false"),
+    )
+
     # Indexes
     op.create_index("idx_agents_tenant", "agents", ["tenant_id"])
     op.create_index("idx_knowledge_user", "learner_knowledge", ["user_id"])
@@ -233,6 +247,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.drop_table("notification_preferences")
     op.drop_table("scheduler_metrics")
     op.drop_table("audit_log")
     op.drop_table("evolution_proposals")

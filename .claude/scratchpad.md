@@ -2,7 +2,7 @@
 > Claude: Update this file as you work. This persists across sessions.
 
 ## Current State
-- Migration step: STEP 5 COMPLETE (embedded tutor)
+- Migration step: STEP 6 COMPLETE (profile section)
 - Last session: 2026-03-16
 - Branch: main
 
@@ -38,7 +38,7 @@
 3. ~~Conversation modes~~ DONE
 4. ~~Trust-adaptive personality~~ DONE
 5. ~~Embedded tutor~~ DONE
-6. Profile section (context/PROFILE_SECTION.md)
+6. ~~Profile section~~ DONE
 7. Social layer — groups, events, feed (context/SOCIAL_LAYER.md)
 8. Mock agents + connections (context/MOCK_AGENTS_CONNECTIONS.md)
 

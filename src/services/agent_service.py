@@ -32,6 +32,9 @@ def _row_to_response(row: dict) -> AgentResponse:
         domain_modifiers=row.get("domain_modifiers", {}),
         personality_confidence=row.get("personality_confidence", 0.7),
         questions_answered=row.get("questions_answered", 0),
+        tutor_voice=row.get("tutor_voice", "en-GB-SoniaNeural"),
+        tutor_avatar_url=row.get("tutor_avatar_url"),
+        tutor_mode_preference=row.get("tutor_mode_preference", "active"),
         status=row["status"],
     )
 
@@ -47,8 +50,9 @@ async def create_agent(req: AgentCreate, user_id: str, tenant_id: str) -> AgentR
             interests, communication_style, lora_archetype,
             default_privacy_level, avatar_image_url,
             default_trust_for_strangers, is_mock,
-            domain_modifiers, personality_confidence, questions_answered)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+            domain_modifiers, personality_confidence, questions_answered,
+            tutor_voice, tutor_avatar_url, tutor_mode_preference)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
            RETURNING *""",
         agent_id,
         uuid.UUID(user_id),
@@ -69,6 +73,9 @@ async def create_agent(req: AgentCreate, user_id: str, tenant_id: str) -> AgentR
         req.domain_modifiers,
         req.personality_confidence,
         req.questions_answered,
+        req.tutor_voice,
+        req.tutor_avatar_url,
+        req.tutor_mode_preference,
     )
 
     await _sync_agent_to_neo4j(row)
