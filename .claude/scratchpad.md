@@ -2,12 +2,14 @@
 > Claude: Update this file as you work. This persists across sessions.
 
 ## Current State
-- Migration step: STEP 1 COMPLETE (critical bugs fixed)
+- Migration step: STEP 2 COMPLETE (adaptive onboarding)
 - Last session: 2026-03-16
 - Branch: main
 
 ## What's Been Done
-- [x] Onboarding flow (4 steps: basics, interests, 10 scenarios, privacy)
+- [x] Step 1: Critical bugs fixed (CORS, graph, agent loading, tooltips, empty states, agent picker)
+- [x] Step 2: Adaptive onboarding (question banks, dynamic selection, domain modifiers, confidence)
+- [x] Onboarding flow (4 steps: basics, interests, adaptive scenarios, privacy)
 - [x] Dashboard layout (graph panel + tabbed right panel)
 - [x] Agent tab with personality radar chart
 - [x] Graph view with D3.js — shows user agent + 5 mock agents + edges
@@ -19,21 +21,20 @@
 - [x] Connection service (invite, request, accept/reject)
 - [x] v2.1 changelog implemented (trust-adaptive, embedded tutor, mock agents)
 
-## Step 1 Bugs — ALL FIXED
-- [x] BUG 1: CORS/Axios — CORS middleware configured, API base URL correct, JWT interceptor works
-- [x] BUG 2: Graph not showing — Fixed Neo4j query to filter null edges/neighbors, KNOWS edges auto-created on agent creation
-- [x] BUG 3: Wrong agent on dashboard — Dashboard loads current user's agent via /api/v1/auth/me
-- [x] BUG 4: Graph tooltips — Hover shows name, archetype, communication style, interests, trust level
-- [x] BUG 5: Empty states — All tabs have helpful empty state messages
-- [x] BUG 6: Agent picker — Modal with agent list, topic input, Start Debate button
+## Step 2 Details (Adaptive Onboarding)
+- src/data/question_banks.py: 110 questions, 21 domains + 5 universal, 1374 lines
+- GET /api/v1/onboarding/questions?interests=X,Y — dynamic question selection
+- POST /api/v1/onboarding/personality/adaptive — scoring with domain modifiers + confidence
+- Frontend: domain tags on questions, confidence bar, estimated time, domain insights on result screen
+- DB: agents table has domain_modifiers (JSON), personality_confidence (Float), questions_answered (Int)
+- Triple-layer personality: base × domain × trust
 
 ## Tests
-- 122 tests passing (all unit + integration)
-- Test fix: added `is_mock` and `default_trust_for_strangers` to test mock_row, added `mock_pg.fetch` for auto-connect
+- 123 tests passing (all unit + integration)
 
 ## What's Next (Migration Steps)
-1. ~~Fix critical bugs~~ ✅ DONE
-2. Adaptive onboarding (context/ADAPTIVE_ONBOARDING.md)
+1. ~~Fix critical bugs~~ DONE
+2. ~~Adaptive onboarding~~ DONE
 3. Conversation modes + streaming (context/CONVERSATION_MODES.md)
 4. Trust-adaptive personality (context/TRUST_ADAPTIVE.md)
 5. Embedded tutor (context/EMBEDDED_TUTOR.md)
@@ -46,3 +47,4 @@
 - Mock agents are seeded on DB migration (5 agents: Aria, Marcus, Priya, James, Luna)
 - Neo4j graph query needed null filtering for OPTIONAL MATCH edges
 - Agent creation auto-connects to mock agents via KNOWS edges in Neo4j
+- Question selection: 2-3 per interest, gap-filling with universal fallbacks

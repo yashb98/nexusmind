@@ -1,5 +1,4 @@
 {
-  "model": "opus",
   "permissions": {
     "allow": [
       "Read",
@@ -35,8 +34,12 @@
       "Bash(chmod 777 *)",
       "Bash(*DROP TABLE*)",
       "Bash(*DROP DATABASE*)"
+    ],
+    "additionalDirectories": [
+      "/Users/yashbishnoi/Downloads/nexusmind/src/data"
     ]
   },
+  "model": "opus",
   "hooks": {
     "PostToolUse": [
       {
