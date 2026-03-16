@@ -29,6 +29,7 @@ def _row_to_response(row: dict) -> AgentResponse:
         avatar_image_url=row.get("avatar_image_url"),
         default_trust_for_strangers=row.get("default_trust_for_strangers", 0.2),
         is_mock=row.get("is_mock", False),
+        tagline=row.get("tagline"),
         domain_modifiers=row.get("domain_modifiers", {}),
         personality_confidence=row.get("personality_confidence", 0.7),
         questions_answered=row.get("questions_answered", 0),
@@ -49,10 +50,10 @@ async def create_agent(req: AgentCreate, user_id: str, tenant_id: str) -> AgentR
             openness, conscientiousness, extraversion, agreeableness, neuroticism,
             interests, communication_style, lora_archetype,
             default_privacy_level, avatar_image_url,
-            default_trust_for_strangers, is_mock,
+            default_trust_for_strangers, is_mock, tagline,
             domain_modifiers, personality_confidence, questions_answered,
             tutor_voice, tutor_avatar_url, tutor_mode_preference)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
            RETURNING *""",
         agent_id,
         uuid.UUID(user_id),
@@ -70,6 +71,7 @@ async def create_agent(req: AgentCreate, user_id: str, tenant_id: str) -> AgentR
         req.avatar_image_url,
         req.default_trust_for_strangers,
         req.is_mock,
+        req.tagline,
         req.domain_modifiers,
         req.personality_confidence,
         req.questions_answered,

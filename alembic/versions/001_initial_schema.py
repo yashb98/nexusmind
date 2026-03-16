@@ -59,6 +59,7 @@ def upgrade() -> None:
         sa.Column("avatar_image_url", sa.String(500)),
         sa.Column("default_trust_for_strangers", sa.Float, server_default="0.2", nullable=False),
         sa.Column("is_mock", sa.Boolean, server_default="false", nullable=False),
+        sa.Column("tagline", sa.String(255), nullable=True),
         sa.Column("domain_modifiers", sa.JSON, server_default="{}"),
         sa.Column("personality_confidence", sa.Float, server_default="0.7"),
         sa.Column("questions_answered", sa.Integer, server_default="0"),

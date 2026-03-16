@@ -63,14 +63,13 @@ async def send_request(
     request_id = uuid.uuid4()
     row = await postgres.fetchrow(
         """INSERT INTO connection_requests
-           (id, from_agent_id, to_agent_id, message, status, tenant_id)
-           VALUES ($1, $2, $3, $4, 'pending', $5)
+           (id, from_agent_id, to_agent_id, message, status)
+           VALUES ($1, $2, $3, $4, 'pending')
            RETURNING *""",
         request_id,
         uuid.UUID(from_agent_id),
         uuid.UUID(to_agent_id),
         message,
-        uuid.UUID(tenant_id),
     )
     logger.info(
         "connection_request_sent",
