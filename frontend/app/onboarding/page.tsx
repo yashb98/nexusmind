@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 import { useStore } from "@/lib/store";
 import {
   Radar,
@@ -127,6 +128,7 @@ export default function OnboardingPage() {
 
   // Step management
   const [step, setStep] = useState(0);
+  const stepDir = useRef(1);
 
   // Step 1: Agent identity
   const [agentName, setAgentName] = useState("");
@@ -242,6 +244,7 @@ export default function OnboardingPage() {
     if (currentQuestion < questions.length - 1) {
       setCurrentQuestion((c) => c + 1);
     } else {
+      stepDir.current = 1;
       setStep(3);
     }
   };
@@ -317,7 +320,13 @@ export default function OnboardingPage() {
       handleFinish();
       return;
     }
+    stepDir.current = 1;
     setStep((s) => s + 1);
+  };
+
+  const handleBack = () => {
+    stepDir.current = -1;
+    setStep((s) => Math.max(0, s - 1));
   };
 
   /* ---------------------------------------------------------------- */
@@ -427,12 +436,20 @@ export default function OnboardingPage() {
             You&apos;re connected to 5 agents. Try talking to Priya first — she&apos;s the friendliest.
           </div>
 
-          <button
+          <motion.button
             onClick={() => router.push("/dashboard")}
-            className="mt-5 w-full rounded-lg bg-zinc-900 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+            className="relative mt-5 w-full rounded-lg bg-zinc-900 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+            whileHover={{ scale: 1.015 }}
+            whileTap={{ scale: 0.97 }}
           >
+            <motion.span
+              className="absolute inset-0 rounded-lg border-2 border-indigo-400 dark:border-indigo-600"
+              animate={{ scale: [1, 1.04, 1], opacity: [0.6, 0, 0.6] }}
+              transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+              aria-hidden="true"
+            />
             Go to Dashboard
-          </button>
+          </motion.button>
         </div>
       </div>
     );
@@ -505,10 +522,14 @@ export default function OnboardingPage() {
                 </label>
                 <div className="mt-3 flex flex-wrap gap-4">
                   {AVATAR_PRESETS.map((avatar) => (
-                    <button
+                    <motion.button
                       key={avatar.id}
                       onClick={() => setSelectedAvatar(avatar.id)}
-                      className={`flex flex-col items-center gap-1.5 rounded-xl p-3 transition-all ${
+                      aria-label={`Select ${avatar.label} avatar`}
+                      aria-pressed={selectedAvatar === avatar.id}
+                      whileTap={{ scale: 0.93 }}
+                      whileHover={{ scale: 1.05 }}
+                      className={`flex flex-col items-center gap-1.5 rounded-xl p-3 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 ${
                         selectedAvatar === avatar.id
                           ? "bg-zinc-100 ring-2 ring-zinc-900 dark:bg-zinc-800 dark:ring-zinc-100"
                           : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
@@ -523,7 +544,7 @@ export default function OnboardingPage() {
                       <span className="text-xs text-zinc-600 dark:text-zinc-400">
                         {avatar.label}
                       </span>
-                    </button>
+                    </motion.button>
                   ))}
                 </div>
               </div>
@@ -665,23 +686,25 @@ export default function OnboardingPage() {
           {step !== 2 && (
             <div className="mt-8 flex items-center justify-between">
               <button
-                onClick={() => setStep((s) => Math.max(0, s - 1))}
+                onClick={handleBack}
                 disabled={step === 0}
-                className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-900 disabled:invisible dark:text-zinc-400 dark:hover:text-zinc-100"
+                className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-900 disabled:invisible dark:text-zinc-400 dark:hover:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
               >
                 Back
               </button>
-              <button
+              <motion.button
                 onClick={handleNext}
                 disabled={!canAdvance() || submitting}
-                className="rounded-lg bg-zinc-900 px-6 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+                className="rounded-lg bg-zinc-900 px-6 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+                whileTap={canAdvance() && !submitting ? { scale: 0.96 } : {}}
+                whileHover={canAdvance() && !submitting ? { scale: 1.02 } : {}}
               >
                 {submitting
                   ? "Creating..."
                   : step === 3
                     ? "Finish"
                     : "Continue"}
-              </button>
+              </motion.button>
             </div>
           )}
         </div>
