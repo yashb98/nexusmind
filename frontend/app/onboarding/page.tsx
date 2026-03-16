@@ -110,6 +110,7 @@ export default function OnboardingPage() {
   const router = useRouter();
   const token = useStore((s) => s.token);
   const hydrated = useStore((s) => s._hydrated);
+  const setMyAgentId = useStore((s) => s.setMyAgentId);
 
   useEffect(() => {
     if (hydrated && !token) router.replace("/login");
@@ -203,7 +204,7 @@ export default function OnboardingPage() {
         personalityRes.data.result ?? personalityRes.data;
       setPersonalityResult(result);
 
-      await createAgent({
+      const agentResp = await createAgent({
         display_name: agentName,
         avatar_image_url: selectedAvatar,
         interests: selectedTopics,
@@ -216,6 +217,10 @@ export default function OnboardingPage() {
         communication_style: result.communication_style ?? "analytical",
         lora_archetype: result.archetype,
       });
+
+      if (agentResp.data?.id) {
+        setMyAgentId(agentResp.data.id);
+      }
 
       setShowResult(true);
     } catch {

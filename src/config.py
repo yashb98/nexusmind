@@ -46,6 +46,9 @@ class LLMSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="", env_file=".env", extra="ignore")
 
+    kimi_api_key: str = Field(default="")
+    kimi_model: str = Field(default="openai/moonshot-v1-8k")
+    kimi_api_base: str = Field(default="https://api.moonshot.cn/v1")
     runpod_api_key: str = Field(default="")
     runpod_llm_endpoint: str = Field(default="")
     runpod_llm_model: str = Field(default="openai/Qwen/Qwen2.5-7B-Instruct")
@@ -80,7 +83,7 @@ class LangfuseSettings(BaseSettings):
 
     public_key: str = Field(default="")
     secret_key: str = Field(default="")
-    host: str = Field(default="https://cloud.langfuse.com")
+    base_url: str = Field(default="https://cloud.langfuse.com")
 
 
 class AuthSettings(BaseSettings):

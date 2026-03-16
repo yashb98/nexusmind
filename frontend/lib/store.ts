@@ -5,6 +5,7 @@ interface AppState {
   token: string | null;
   userId: string | null;
   tenantId: string | null;
+  myAgentId: string | null;
   selectedAgentId: string | null;
   selectedConversation: Record<string, unknown> | null;
   activePanel: string;
@@ -12,6 +13,7 @@ interface AppState {
 
   setToken: (token: string) => void;
   setUser: (userId: string, tenantId: string) => void;
+  setMyAgentId: (agentId: string) => void;
   selectAgent: (agentId: string | null) => void;
   selectConversation: (conv: Record<string, unknown> | null) => void;
   setActivePanel: (panel: string) => void;
@@ -23,6 +25,7 @@ export const useStore = create<AppState>((set) => ({
   token: null,
   userId: null,
   tenantId: null,
+  myAgentId: null,
   selectedAgentId: null,
   selectedConversation: null,
   activePanel: "agent",
@@ -35,6 +38,11 @@ export const useStore = create<AppState>((set) => ({
 
   setUser: (userId, tenantId) => set({ userId, tenantId }),
 
+  setMyAgentId: (agentId) => {
+    if (typeof window !== "undefined") localStorage.setItem("my_agent_id", agentId);
+    set({ myAgentId: agentId });
+  },
+
   selectAgent: (agentId) => set({ selectedAgentId: agentId, activePanel: "agent" }),
 
   selectConversation: (conv) => set({ selectedConversation: conv, activePanel: "conversation" }),
@@ -42,14 +50,18 @@ export const useStore = create<AppState>((set) => ({
   setActivePanel: (panel) => set({ activePanel: panel }),
 
   logout: () => {
-    if (typeof window !== "undefined") localStorage.removeItem("token");
-    set({ token: null, userId: null, tenantId: null });
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("token");
+      localStorage.removeItem("my_agent_id");
+    }
+    set({ token: null, userId: null, tenantId: null, myAgentId: null });
   },
 
   _hydrate: () => {
     if (typeof window !== "undefined") {
       const token = localStorage.getItem("token");
-      set({ token, _hydrated: true });
+      const myAgentId = localStorage.getItem("my_agent_id");
+      set({ token, myAgentId, _hydrated: true });
     }
   },
 }));

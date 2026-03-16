@@ -16,20 +16,30 @@ litellm.suppress_debug_info = True
 
 def _get_primary_model() -> str:
     """Get the primary LLM model identifier."""
+    if settings.llm.kimi_api_key:
+        return settings.llm.kimi_model
     if settings.llm.runpod_llm_endpoint:
         return settings.llm.runpod_llm_model
     return settings.llm.litellm_fallback_model
 
 
 def _get_api_base() -> str | None:
-    """Get API base URL for RunPod endpoint."""
+    """Get API base URL for the active provider."""
+    if settings.llm.kimi_api_key:
+        return settings.llm.kimi_api_base
     if settings.llm.runpod_llm_endpoint:
         return f"https://api.runpod.ai/v2/{settings.llm.runpod_llm_endpoint}/openai/v1"
     return None
 
 
 def _get_api_key() -> str:
-    """Get API key for the active provider."""
+    """Get API key for the active provider.
+
+    For Kimi Code (Anthropic-compatible), the key is passed as the
+    anthropic api_key so LiteLLM sends it in the x-api-key header.
+    """
+    if settings.llm.kimi_api_key:
+        return settings.llm.kimi_api_key
     if settings.llm.runpod_llm_endpoint:
         return settings.llm.runpod_api_key
     return settings.llm.anthropic_api_key
@@ -69,25 +79,27 @@ async def generate(
     except Exception as primary_err:
         logger.warning("llm_primary_failed", error=str(primary_err))
         # Fallback to Anthropic
-        try:
-            response = await litellm.acompletion(
-                model=settings.llm.litellm_fallback_model,
-                messages=all_messages,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                api_key=settings.llm.anthropic_api_key,
-                metadata={"trace_id": trace_id},
-            )
-            content = response.choices[0].message.content or ""
-            logger.info(
-                "llm_fallback_used",
-                trace_id=trace_id,
-                model=settings.llm.litellm_fallback_model,
-            )
-            return content
-        except Exception as fallback_err:
-            logger.error("llm_all_failed", primary=str(primary_err), fallback=str(fallback_err))
-            raise
+        if settings.llm.anthropic_api_key:
+            try:
+                response = await litellm.acompletion(
+                    model=settings.llm.litellm_fallback_model,
+                    messages=all_messages,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    api_key=settings.llm.anthropic_api_key,
+                    metadata={"trace_id": trace_id},
+                )
+                content = response.choices[0].message.content or ""
+                logger.info(
+                    "llm_fallback_used",
+                    trace_id=trace_id,
+                    model=settings.llm.litellm_fallback_model,
+                )
+                return content
+            except Exception as fallback_err:
+                logger.error("llm_all_failed", primary=str(primary_err), fallback=str(fallback_err))
+                raise
+        raise
 
 
 async def generate_stream(

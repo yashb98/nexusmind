@@ -55,6 +55,7 @@ async def extract_knowledge(
             messages=[{"role": "user", "content": prompt}],
             trace_id=f"{conversation_id}-extraction",
             temperature=0.3,
+            max_tokens=1500,
         )
 
         data = _parse_extraction(response)

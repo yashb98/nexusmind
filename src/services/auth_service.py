@@ -6,7 +6,7 @@ import structlog
 from fastapi import HTTPException, status
 
 from src.db import postgres
-from src.models.auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse
+from src.models.auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse, UserUpdate
 from src.utils.auth import create_access_token, hash_password, verify_password
 
 logger = structlog.get_logger(__name__)
@@ -71,3 +71,20 @@ async def get_user(user_id: str) -> UserResponse:
         display_name=row["display_name"],
         role=row["role"],
     )
+
+
+async def update_user(user_id: str, req: UserUpdate) -> UserResponse:
+    """Update user fields and return updated user."""
+    updates = req.model_dump(exclude_none=True)
+    if not updates:
+        return await get_user(user_id)
+
+    set_clauses = ", ".join(f"{k} = ${i + 2}" for i, k in enumerate(updates))
+    values = [uuid.UUID(user_id), *updates.values()]
+    await postgres.execute(
+        f"UPDATE users SET {set_clauses} WHERE id = $1",  # noqa: S608
+        *values,
+    )
+
+    logger.info("user_updated", user_id=user_id, fields=list(updates.keys()))
+    return await get_user(user_id)

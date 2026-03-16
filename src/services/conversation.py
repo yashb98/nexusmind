@@ -33,6 +33,51 @@ PHASE_MAP = {
 }
 
 
+async def init_debate_state(
+    agent_a_id: str,
+    agent_b_id: str,
+    topic: str,
+    tenant_id: str,
+    background: bool = False,
+    max_turns: int = 10,
+) -> ConversationState:
+    """Initialize debate state without running turns (for streaming)."""
+    conversation_id = str(uuid.uuid4())
+
+    state: ConversationState = {
+        "conversation_id": conversation_id,
+        "agent_a_id": agent_a_id,
+        "agent_b_id": agent_b_id,
+        "tenant_id": tenant_id,
+        "topic": topic,
+        "current_speaker": agent_a_id,
+        "messages": [],
+        "turn_count": 0,
+        "max_turns": max_turns,
+        "phase": "OPEN",
+        "relationship": {},
+        "extracted_insights": [],
+        "extracted_entities": [],
+        "extracted_relations": [],
+        "quality_score": 0.0,
+        "background": background,
+        "should_continue": True,
+        "memories": [],
+        "permission_ok": True,
+        "system_prompt": "",
+    }
+
+    logger.info(
+        "conversation_started",
+        conversation_id=conversation_id,
+        agent_a=agent_a_id,
+        agent_b=agent_b_id,
+        topic=topic,
+    )
+
+    return state
+
+
 async def run_socratic_debate(
     agent_a_id: str,
     agent_b_id: str,

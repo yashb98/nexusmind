@@ -34,7 +34,14 @@
       "Bash(__NEW_LINE_cac9fc83daf11c49__ echo:*)",
       "Bash(curl -s -w \"\\\\nHTTP: %{http_code}\\\\n\" -H \"Authorization: Bearer $TOKEN\" http://localhost:8000/api/v1/agents)",
       "Bash(curl -s -w \"\\\\nHTTP: %{http_code}\\\\n\" -H \"Authorization: Bearer $TOKEN\" http://localhost:8000/api/v1/scheduler/status)",
-      "Bash(uv run:*)"
+      "Bash(uv run:*)",
+      "Bash(curl -s -o /dev/null -w \"status: %{http_code}, time: %{time_total}s\" http://localhost:3000/login)",
+      "Bash(curl -s -o /dev/null -w \"status: %{http_code}, time: %{time_total}s\" http://localhost:3000/dashboard)",
+      "Bash(curl -s -w \"\\\\nHTTP: %{http_code}\" https://api.moonshot.cn/v1/chat/completions -H \"Content-Type: application/json\" -H \"Authorization: Bearer sk-kimi-FaWualbjQkewu5M1L4LgfjMdZIHhdbfSLRPs7S1gaegQ5fMYAWtxdLDASb1hO7tE\" -d '{\"\"model\"\":\"\"kimi-k2.5\"\",\"\"messages\"\":[{\"\"role\"\":\"\"user\"\",\"\"content\"\":\"\"Say hello in one sentence.\"\"}],\"\"max_tokens\"\":30}')",
+      "Bash(curl -s -w \"\\\\nHTTP: %{http_code}\" https://api.moonshot.ai/v1/chat/completions -H \"Content-Type: application/json\" -H \"Authorization: Bearer sk-kimi-FaWualbjQkewu5M1L4LgfjMdZIHhdbfSLRPs7S1gaegQ5fMYAWtxdLDASb1hO7tE\" -d '{\"\"model\"\":\"\"kimi-k2.5\"\",\"\"messages\"\":[{\"\"role\"\":\"\"user\"\",\"\"content\"\":\"\"Say hello in one sentence.\"\"}],\"\"max_tokens\"\":30}')",
+      "WebSearch",
+      "Bash(curl -s -w \"\\\\nHTTP: %{http_code}\" https://api.moonshot.ai/anthropic/v1/messages -H \"Content-Type: application/json\" -H \"x-api-key: sk-kimi-FaWualbjQkewu5M1L4LgfjMdZIHhdbfSLRPs7S1gaegQ5fMYAWtxdLDASb1hO7tE\" -d '{\"\"model\"\":\"\"kimi-k2.5\"\",\"\"max_tokens\"\":30,\"\"messages\"\":[{\"\"role\"\":\"\"user\"\",\"\"content\"\":\"\"Say hello in one sentence.\"\"}]}')",
+      "Bash(curl -s -o /dev/null -w \"status: %{http_code}\" http://localhost:3000/dashboard)"
     ]
   }
 }

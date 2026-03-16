@@ -8,29 +8,40 @@ logger = structlog.get_logger(__name__)
 
 
 async def get_agent_network(agent_id: str, tenant_id: str, hops: int = 2) -> dict:
-    """Get agent's network (nodes + edges) for D3.js visualization."""
+    """Get agent's network (nodes + edges) for D3.js visualization.
+
+    Uses undirected KNOWS traversal and doesn't filter connected nodes by
+    tenant_id so that mock agents (which live in a different tenant) are
+    included in the graph.
+    """
     records = await neo4j_client.execute_read(
-        """MATCH path = (a:Agent {id: $id, tenant_id: $tid})-[:KNOWS*1.."""
-        + str(min(hops, 3))
-        + """]->(b:Agent {tenant_id: $tid})
-           UNWIND nodes(path) AS n
-           UNWIND relationships(path) AS r
-           WITH COLLECT(DISTINCT {
-               id: n.id,
-               display_name: n.display_name,
-               interests: n.interests,
-               openness: n.openness,
-               extraversion: n.extraversion
-           }) AS nodes,
-           COLLECT(DISTINCT {
-               source: startNode(r).id,
-               target: endNode(r).id,
-               strength: r.strength,
-               conversation_count: r.conversation_count
-           }) AS edges
-           RETURN nodes, edges""",
+        """MATCH (a:Agent {id: $id})
+           OPTIONAL MATCH (a)-[r:KNOWS]-(b:Agent)
+           WITH a,
+                COLLECT(DISTINCT {
+                    id: b.id,
+                    display_name: b.display_name,
+                    interests: b.interests,
+                    openness: b.openness,
+                    extraversion: b.extraversion,
+                    is_mock: COALESCE(b.is_mock, false)
+                }) AS neighbors,
+                COLLECT(DISTINCT {
+                    source: startNode(r).id,
+                    target: endNode(r).id,
+                    strength: r.strength,
+                    trust: r.trust,
+                    conversation_count: r.conversation_count
+                }) AS edges
+           RETURN neighbors + [{
+               id: a.id,
+               display_name: a.display_name,
+               interests: a.interests,
+               openness: a.openness,
+               extraversion: a.extraversion,
+               is_mock: COALESCE(a.is_mock, false)
+           }] AS nodes, edges""",
         id=agent_id,
-        tid=tenant_id,
     )
 
     if not records:

@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends
 
-from src.models.auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse
+from src.models.auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse, UserUpdate
 from src.services import auth_service
 from src.utils.auth import get_current_user
 
@@ -25,3 +25,11 @@ async def login(req: LoginRequest) -> TokenResponse:
 async def me(current_user: dict = Depends(get_current_user)) -> UserResponse:
     """Get current user info (protected route)."""
     return await auth_service.get_user(current_user["user_id"])
+
+
+@router.patch("/me", response_model=UserResponse)
+async def update_me(
+    req: UserUpdate, current_user: dict = Depends(get_current_user)
+) -> UserResponse:
+    """Update current user info."""
+    return await auth_service.update_user(current_user["user_id"], req)

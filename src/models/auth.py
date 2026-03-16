@@ -25,6 +25,12 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+class UserUpdate(BaseModel):
+    """User update request."""
+
+    display_name: str | None = Field(default=None, min_length=1, max_length=255)
+
+
 class UserResponse(BaseModel):
     """User info response."""
 
