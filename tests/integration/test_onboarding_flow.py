@@ -54,13 +54,20 @@ class TestOnboardingFlow:
         for trait in traits:
             assert 0 <= scores[trait] <= 1
 
-    async def test_too_few_answers_rejected(self, client: AsyncClient) -> None:
+    async def test_empty_answers_rejected(self, client: AsyncClient) -> None:
+        resp = await client.post(
+            "/api/v1/onboarding/personality",
+            json={"answers": []},
+        )
+        assert resp.status_code == 422
+
+    async def test_single_answer_accepted(self, client: AsyncClient) -> None:
         answers = [{"question_id": 1, "option_index": 0}]
         resp = await client.post(
             "/api/v1/onboarding/personality",
             json={"answers": answers},
         )
-        assert resp.status_code == 422
+        assert resp.status_code == 200
 
     async def test_invalid_option_index_rejected(self, client: AsyncClient) -> None:
         answers = [{"question_id": i, "option_index": 5} for i in range(1, 11)]

@@ -19,6 +19,9 @@ class AgentCreate(BaseModel):
     avatar_image_url: str | None = None
     default_trust_for_strangers: float = Field(default=0.2, ge=0, le=1)
     is_mock: bool = False
+    domain_modifiers: dict = {}
+    personality_confidence: float = 0.7
+    questions_answered: int = 0
 
 
 class AgentUpdate(BaseModel):
@@ -50,4 +53,7 @@ class AgentResponse(BaseModel):
     avatar_image_url: str | None
     default_trust_for_strangers: float
     is_mock: bool
+    domain_modifiers: dict = {}
+    personality_confidence: float = 0.7
+    questions_answered: int = 0
     status: str

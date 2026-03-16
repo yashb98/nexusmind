@@ -1,6 +1,8 @@
 """Personality service — scoring, archetypes, prompt generation."""
 
 import math
+import random
+from collections import defaultdict
 
 from src.models.onboarding import (
     BigFiveScores,
@@ -578,3 +580,199 @@ def _format_memories(memories: list[str] | None) -> str:
         return "MEMORIES: None yet."
     formatted = "\n".join(f"- {m}" for m in memories[:5])
     return f"MEMORIES:\n{formatted}"
+
+
+def select_questions(
+    selected_interests: list[str],
+    min_per_dimension: int = 2,
+) -> list[dict]:
+    """Select personalized questions ensuring all 5 dimensions covered."""
+    from src.data.question_banks import QUESTION_BANKS
+
+    dimension_count: dict[str, int] = {
+        d: 0
+        for d in [
+            "openness",
+            "conscientiousness",
+            "extraversion",
+            "agreeableness",
+            "neuroticism",
+        ]
+    }
+    selected: list[dict] = []
+
+    pick_per_interest = 3 if len(selected_interests) <= 4 else 2
+
+    for interest in selected_interests:
+        bank = QUESTION_BANKS.get(interest, [])
+        if not bank:
+            continue
+
+        def gap_score(q: dict) -> int:
+            return sum(
+                1
+                for d in q["dimensions_tested"]
+                if dimension_count[d] < min_per_dimension
+            )
+
+        sorted_bank = sorted(bank, key=gap_score, reverse=True)
+
+        for q in sorted_bank[:pick_per_interest]:
+            selected.append(q)
+            for d in q["dimensions_tested"]:
+                dimension_count[d] += 1
+
+    # Fill gaps with universal questions
+    for dim, count in dimension_count.items():
+        if count < min_per_dimension:
+            universals = [
+                q
+                for q in QUESTION_BANKS.get("_universal", [])
+                if dim in q["dimensions_tested"] and q not in selected
+            ]
+            if universals:
+                selected.append(universals[0])
+                for d in universals[0]["dimensions_tested"]:
+                    dimension_count[d] += 1
+
+    random.shuffle(selected)
+    return selected
+
+
+def compute_domain_modifiers(
+    answers: list,
+    questions: list[dict],
+    base_big_five: dict[str, float],
+) -> dict[str, dict[str, float]]:
+    """Compute per-domain personality adjustments from answers."""
+    domain_scores: dict[str, dict[str, list[float]]] = defaultdict(
+        lambda: defaultdict(list)
+    )
+
+    question_map = {q["id"]: q for q in questions}
+
+    for answer in answers:
+        q_id = (
+            answer.question_id
+            if hasattr(answer, "question_id")
+            else answer.get("question_id")
+        )
+        opt_idx = (
+            answer.option_index
+            if hasattr(answer, "option_index")
+            else answer.get("option_index")
+        )
+        question = question_map.get(q_id) or question_map.get(str(q_id))
+        if not question or question.get("domain") == "Universal":
+            continue
+        options = question["options"]
+        if opt_idx >= len(options):
+            continue
+        option = options[opt_idx]
+        scores = (
+            option.get("scores", {}) if isinstance(option, dict) else option.scores
+        )
+        domain = question["domain"]
+        for trait, delta in (
+            scores.items() if isinstance(scores, dict) else scores.items()
+        ):
+            domain_scores[domain][trait].append(delta)
+
+    modifiers: dict[str, dict[str, float]] = {}
+    for domain, traits in domain_scores.items():
+        modifiers[domain] = {}
+        for trait, deltas in traits.items():
+            avg_delta = sum(deltas) / len(deltas)
+            if abs(avg_delta) > 0.05:
+                modifiers[domain][trait] = round(avg_delta, 3)
+
+    return modifiers
+
+
+def compute_confidence(questions_answered: int) -> float:
+    """More questions = higher confidence in personality profile."""
+    if questions_answered <= 5:
+        return 0.5
+    elif questions_answered <= 8:
+        return 0.65
+    elif questions_answered <= 12:
+        return 0.78
+    elif questions_answered <= 16:
+        return 0.85
+    elif questions_answered <= 20:
+        return 0.92
+    else:
+        return min(0.98, 0.92 + (questions_answered - 20) * 0.003)
+
+
+def compute_adaptive_personality_result(
+    answers: list,
+    questions: list[dict],
+) -> dict:
+    """Full adaptive pipeline: answers -> scores -> archetype -> domain modifiers -> confidence."""
+    raw: dict[str, float] = {
+        "openness": 0.0,
+        "conscientiousness": 0.0,
+        "extraversion": 0.0,
+        "agreeableness": 0.0,
+        "neuroticism": 0.0,
+    }
+
+    question_map = {q["id"]: q for q in questions}
+
+    for answer in answers:
+        q_id = (
+            answer.question_id
+            if hasattr(answer, "question_id")
+            else answer.get("question_id")
+        )
+        opt_idx = (
+            answer.option_index
+            if hasattr(answer, "option_index")
+            else answer.get("option_index")
+        )
+        question = question_map.get(q_id) or question_map.get(str(q_id))
+        if not question:
+            continue
+        options = question["options"]
+        if opt_idx >= len(options):
+            continue
+        option = options[opt_idx]
+        scores = (
+            option.get("scores", {}) if isinstance(option, dict) else option.scores
+        )
+        for trait, delta in (
+            scores.items() if isinstance(scores, dict) else scores.items()
+        ):
+            if trait in raw:
+                raw[trait] += delta
+
+    # Normalize to 0-1
+    for trait in raw:
+        raw[trait] = max(0.0, min(1.0, 0.5 + raw[trait]))
+
+    scores = BigFiveScores(**raw)
+    style = compute_communication_style(scores)
+    archetype = assign_archetype(scores)
+    description = generate_description(scores, archetype)
+
+    base_dict = {
+        "openness": scores.openness,
+        "conscientiousness": scores.conscientiousness,
+        "extraversion": scores.extraversion,
+        "agreeableness": scores.agreeableness,
+        "neuroticism": scores.neuroticism,
+    }
+
+    domain_mods = compute_domain_modifiers(answers, questions, base_dict)
+    confidence = compute_confidence(len(answers))
+
+    return {
+        "scores": scores,
+        "archetype": archetype,
+        "communication_style": style,
+        "description": description,
+        "domain_modifiers": domain_mods,
+        "confidence": confidence,
+        "questions_answered": len(answers),
+    }

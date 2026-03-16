@@ -43,8 +43,14 @@ export const updateMe = (data: { display_name?: string }) =>
 
 // Onboarding
 export const getScenarios = () => api.get("/api/v1/onboarding/scenarios");
-export const scorePersonality = (answers: { question_id: number; option_index: number }[]) =>
+export const scorePersonality = (answers: { question_id: number | string; option_index: number }[]) =>
   api.post("/api/v1/onboarding/personality", { answers });
+export const getAdaptiveQuestions = (interests: string[]) =>
+  api.get(`/api/v1/onboarding/questions?interests=${interests.join(",")}`);
+export const scoreAdaptivePersonality = (
+  answers: { question_id: number | string; option_index: number }[],
+  questions: Record<string, unknown>[],
+) => api.post("/api/v1/onboarding/personality/adaptive", { answers, questions });
 
 // Agents
 export const createAgent = (data: Record<string, unknown>) => api.post("/api/v1/agents", data);

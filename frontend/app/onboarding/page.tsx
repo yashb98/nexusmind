@@ -11,7 +11,13 @@ import {
   PolarRadiusAxis,
   ResponsiveContainer,
 } from "recharts";
-import { getScenarios, scorePersonality, createAgent } from "@/lib/api";
+import {
+  getScenarios,
+  scorePersonality,
+  getAdaptiveQuestions,
+  scoreAdaptivePersonality,
+  createAgent,
+} from "@/lib/api";
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                         */
@@ -81,12 +87,12 @@ const STEP_TITLES = [
 /*  Types                                                             */
 /* ------------------------------------------------------------------ */
 
-interface Scenario {
-  question_id: number;
-  id?: number;
-  question: string;
-  scenario?: string;
-  options: { text: string; scores: Record<string, number> }[] | string[];
+interface AdaptiveQuestion {
+  id: string | number;
+  scenario: string;
+  domain: string;
+  options: { text: string; scores: Record<string, number> }[];
+  dimensions_tested: string[];
 }
 
 interface PersonalityResult {
@@ -100,6 +106,9 @@ interface PersonalityResult {
     agreeableness: number;
     neuroticism: number;
   };
+  domain_modifiers?: Record<string, Record<string, number>>;
+  confidence?: number;
+  questions_answered?: number;
 }
 
 /* ------------------------------------------------------------------ */
@@ -126,13 +135,14 @@ export default function OnboardingPage() {
   // Step 2: Interests
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
 
-  // Step 3: Scenarios
-  const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  // Step 3: Adaptive scenarios
+  const [questions, setQuestions] = useState<AdaptiveQuestion[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<
-    { question_id: number; option_index: number }[]
+    { question_id: string | number; option_index: number }[]
   >([]);
   const [loadingScenarios, setLoadingScenarios] = useState(false);
+  const [useAdaptive, setUseAdaptive] = useState(true);
 
   // Step 4: Privacy
   const [privacyLevel, setPrivacyLevel] = useState<number | null>(null);
@@ -145,25 +155,68 @@ export default function OnboardingPage() {
   const [error, setError] = useState("");
 
   /* ---------------------------------------------------------------- */
-  /*  Fetch scenarios when entering step 3                            */
+  /*  Fetch questions when entering step 3                            */
   /* ---------------------------------------------------------------- */
 
   useEffect(() => {
-    if (step === 2 && scenarios.length === 0) {
+    if (step === 2 && questions.length === 0) {
       setLoadingScenarios(true);
-      getScenarios()
+      // Try adaptive questions first, fall back to fixed scenarios
+      getAdaptiveQuestions(selectedTopics)
         .then((res) => {
-          const raw = res.data.scenarios ?? res.data;
-          setScenarios(raw.map((s: Record<string, unknown>) => ({
-            question_id: s.id ?? s.question_id,
-            question: s.scenario ?? s.question,
-            options: s.options,
-          })));
+          const data = res.data;
+          if (Array.isArray(data) && data.length > 0) {
+            setQuestions(
+              data.map((q: Record<string, unknown>) => ({
+                id: q.id as string,
+                scenario: q.scenario as string,
+                domain: q.domain as string,
+                options: q.options as AdaptiveQuestion["options"],
+                dimensions_tested: q.dimensions_tested as string[],
+              }))
+            );
+            setUseAdaptive(true);
+          } else {
+            throw new Error("No adaptive questions");
+          }
         })
-        .catch(() => setError("Failed to load scenarios. Please try again."))
+        .catch(() => {
+          // Fall back to fixed 10 scenarios
+          getScenarios()
+            .then((res) => {
+              const raw = res.data.scenarios ?? res.data;
+              setQuestions(
+                raw.map((s: Record<string, unknown>) => ({
+                  id: s.id ?? s.question_id,
+                  scenario: (s.scenario ?? s.question) as string,
+                  domain: "General",
+                  options: s.options as AdaptiveQuestion["options"],
+                  dimensions_tested: [],
+                }))
+              );
+              setUseAdaptive(false);
+            })
+            .catch(() => setError("Failed to load scenarios."));
+        })
         .finally(() => setLoadingScenarios(false));
     }
-  }, [step, scenarios.length]);
+  }, [step, questions.length, selectedTopics]);
+
+  /* ---------------------------------------------------------------- */
+  /*  Confidence bar                                                  */
+  /* ---------------------------------------------------------------- */
+
+  const answeredCount = answers.length;
+  const confidencePercent =
+    answeredCount <= 5
+      ? 50
+      : answeredCount <= 8
+        ? 65
+        : answeredCount <= 12
+          ? 78
+          : answeredCount <= 16
+            ? 85
+            : Math.min(98, 92 + (answeredCount - 20) * 0.3);
 
   /* ---------------------------------------------------------------- */
   /*  Handlers                                                        */
@@ -180,14 +233,14 @@ export default function OnboardingPage() {
   };
 
   const handleScenarioAnswer = (optionIndex: number) => {
-    const scenario = scenarios[currentQuestion];
+    const q = questions[currentQuestion];
     setAnswers((prev) => [
-      ...prev.filter((a) => a.question_id !== scenario.question_id),
-      { question_id: scenario.question_id, option_index: optionIndex },
+      ...prev.filter((a) => a.question_id !== q.id),
+      { question_id: q.id, option_index: optionIndex },
     ]);
 
-    if (currentQuestion < scenarios.length - 1) {
-      setCurrentQuestion((q) => q + 1);
+    if (currentQuestion < questions.length - 1) {
+      setCurrentQuestion((c) => c + 1);
     } else {
       setStep(3);
     }
@@ -199,9 +252,20 @@ export default function OnboardingPage() {
     setError("");
 
     try {
-      const personalityRes = await scorePersonality(answers);
-      const result: PersonalityResult =
-        personalityRes.data.result ?? personalityRes.data;
+      let result: PersonalityResult;
+
+      if (useAdaptive && questions.length > 0) {
+        const res = await scoreAdaptivePersonality(answers, questions);
+        result = res.data.result ?? res.data;
+      } else {
+        const res = await scorePersonality(
+          answers.map((a) => ({
+            question_id: typeof a.question_id === "string" ? parseInt(a.question_id) : a.question_id,
+            option_index: a.option_index,
+          }))
+        );
+        result = res.data.result ?? res.data;
+      }
       setPersonalityResult(result);
 
       const agentResp = await createAgent({
@@ -216,6 +280,9 @@ export default function OnboardingPage() {
         neuroticism: result.scores.neuroticism,
         communication_style: result.communication_style ?? "analytical",
         lora_archetype: result.archetype,
+        domain_modifiers: result.domain_modifiers ?? {},
+        personality_confidence: result.confidence ?? 0.7,
+        questions_answered: result.questions_answered ?? answers.length,
       });
 
       if (agentResp.data?.id) {
@@ -228,14 +295,7 @@ export default function OnboardingPage() {
     } finally {
       setSubmitting(false);
     }
-  }, [
-    submitting,
-    answers,
-    agentName,
-    selectedAvatar,
-    selectedTopics,
-    privacyLevel,
-  ]);
+  }, [submitting, answers, questions, useAdaptive, agentName, selectedAvatar, selectedTopics, privacyLevel, setMyAgentId]);
 
   const canAdvance = (): boolean => {
     switch (step) {
@@ -275,14 +335,14 @@ export default function OnboardingPage() {
   if (showResult && personalityResult) {
     const radarData = [
       { trait: "Openness", value: personalityResult.scores.openness },
-      {
-        trait: "Conscientiousness",
-        value: personalityResult.scores.conscientiousness,
-      },
+      { trait: "Conscientiousness", value: personalityResult.scores.conscientiousness },
       { trait: "Extraversion", value: personalityResult.scores.extraversion },
       { trait: "Agreeableness", value: personalityResult.scores.agreeableness },
       { trait: "Neuroticism", value: personalityResult.scores.neuroticism },
     ];
+
+    const domainMods = personalityResult.domain_modifiers ?? {};
+    const confidence = personalityResult.confidence ?? 0.7;
 
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 dark:bg-zinc-950">
@@ -296,8 +356,7 @@ export default function OnboardingPage() {
               className="flex h-16 w-16 items-center justify-center rounded-full text-lg font-bold text-white"
               style={{
                 backgroundColor:
-                  AVATAR_PRESETS.find((a) => a.id === selectedAvatar)?.color ??
-                  "#6366f1",
+                  AVATAR_PRESETS.find((a) => a.id === selectedAvatar)?.color ?? "#6366f1",
               }}
             >
               {agentName.charAt(0).toUpperCase()}
@@ -313,33 +372,64 @@ export default function OnboardingPage() {
             </p>
           </div>
 
-          <div className="mt-6 h-64">
+          {/* Confidence */}
+          <div className="mt-5">
+            <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+              <span>Personality Confidence</span>
+              <span className="font-medium">{Math.round(confidence * 100)}%</span>
+            </div>
+            <div className="mt-1 h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+              <div
+                className="h-full rounded-full bg-indigo-500 transition-all"
+                style={{ width: `${confidence * 100}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Radar chart */}
+          <div className="mt-5 h-56">
             <ResponsiveContainer width="100%" height="100%">
               <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="75%">
                 <PolarGrid stroke="#d4d4d8" />
-                <PolarAngleAxis
-                  dataKey="trait"
-                  tick={{ fill: "#71717a", fontSize: 12 }}
-                />
-                <PolarRadiusAxis
-                  domain={[0, 1]}
-                  tick={false}
-                  axisLine={false}
-                />
-                <Radar
-                  dataKey="value"
-                  stroke="#6366f1"
-                  fill="#6366f1"
-                  fillOpacity={0.25}
-                  strokeWidth={2}
-                />
+                <PolarAngleAxis dataKey="trait" tick={{ fill: "#71717a", fontSize: 11 }} />
+                <PolarRadiusAxis domain={[0, 1]} tick={false} axisLine={false} />
+                <Radar dataKey="value" stroke="#6366f1" fill="#6366f1" fillOpacity={0.25} strokeWidth={2} />
               </RadarChart>
             </ResponsiveContainer>
           </div>
 
+          {/* Domain-specific insights */}
+          {Object.keys(domainMods).length > 0 && (
+            <div className="mt-4">
+              <h4 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Domain-Specific Personality
+              </h4>
+              <div className="mt-2 space-y-1.5">
+                {Object.entries(domainMods).map(([domain, mods]) => (
+                  <div key={domain} className="rounded-lg bg-zinc-50 px-3 py-2 text-xs dark:bg-zinc-800">
+                    <span className="font-medium text-zinc-700 dark:text-zinc-200">{domain}:</span>{" "}
+                    <span className="text-zinc-500 dark:text-zinc-400">
+                      {Object.entries(mods)
+                        .map(
+                          ([trait, val]) =>
+                            `${trait} ${val > 0 ? "+" : ""}${(val as number).toFixed(2)}`
+                        )
+                        .join(", ")}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Connected agents message */}
+          <div className="mt-5 rounded-lg bg-indigo-50 px-4 py-3 text-sm text-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-300">
+            You&apos;re connected to 5 agents. Try talking to Priya first — she&apos;s the friendliest.
+          </div>
+
           <button
             onClick={() => router.push("/dashboard")}
-            className="mt-6 w-full rounded-lg bg-zinc-900 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+            className="mt-5 w-full rounded-lg bg-zinc-900 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
           >
             Go to Dashboard
           </button>
@@ -389,9 +479,7 @@ export default function OnboardingPage() {
           </h2>
 
           {error && (
-            <p className="mt-3 text-sm text-red-600 dark:text-red-400">
-              {error}
-            </p>
+            <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p>
           )}
 
           {/* Step 1: Agent name + avatar */}
@@ -446,8 +534,7 @@ export default function OnboardingPage() {
           {step === 1 && (
             <div className="mt-6">
               <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                Select 3 to 10 topics that interest you. ({selectedTopics.length}
-                /10 selected)
+                Select 3 to 10 topics that interest you. ({selectedTopics.length}/10 selected)
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 {TOPICS.map((topic) => {
@@ -467,6 +554,11 @@ export default function OnboardingPage() {
                   );
                 })}
               </div>
+              {selectedTopics.length >= 3 && (
+                <p className="mt-4 text-sm text-zinc-500 dark:text-zinc-400">
+                  We&apos;ll ask you personalized questions based on your interests. ~{Math.max(3, selectedTopics.length <= 4 ? selectedTopics.length * 3 : selectedTopics.length * 2)} questions, about {Math.ceil(selectedTopics.length * 0.5)} minutes.
+                </p>
+              )}
             </div>
           )}
 
@@ -477,10 +569,10 @@ export default function OnboardingPage() {
                 <div className="flex flex-col items-center justify-center py-12">
                   <div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-900 dark:border-zinc-600 dark:border-t-zinc-100" />
                   <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">
-                    Loading scenarios...
+                    Generating personalized questions...
                   </p>
                 </div>
-              ) : scenarios.length > 0 ? (
+              ) : questions.length > 0 ? (
                 <>
                   {/* Progress bar */}
                   <div className="mb-4 flex items-center gap-3">
@@ -488,21 +580,40 @@ export default function OnboardingPage() {
                       <div
                         className="h-full rounded-full bg-zinc-900 transition-all duration-300 dark:bg-zinc-100"
                         style={{
-                          width: `${((currentQuestion + 1) / scenarios.length) * 100}%`,
+                          width: `${((currentQuestion + 1) / questions.length) * 100}%`,
                         }}
                       />
                     </div>
                     <span className="text-xs tabular-nums text-zinc-500 dark:text-zinc-400">
-                      {currentQuestion + 1}/{scenarios.length}
+                      {currentQuestion + 1}/{questions.length}
                     </span>
                   </div>
 
+                  {/* Domain tag + confidence */}
+                  <div className="mb-3 flex items-center justify-between">
+                    {questions[currentQuestion].domain && questions[currentQuestion].domain !== "General" && (
+                      <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">
+                        {questions[currentQuestion].domain}
+                      </span>
+                    )}
+                    <div className="flex items-center gap-2 text-xs text-zinc-400">
+                      <span>Confidence</span>
+                      <div className="h-1.5 w-16 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+                        <div
+                          className="h-full rounded-full bg-emerald-500 transition-all"
+                          style={{ width: `${confidencePercent}%` }}
+                        />
+                      </div>
+                      <span className="tabular-nums">{Math.round(confidencePercent)}%</span>
+                    </div>
+                  </div>
+
                   <p className="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
-                    {scenarios[currentQuestion].question}
+                    {questions[currentQuestion].scenario}
                   </p>
 
                   <div className="mt-4 space-y-2">
-                    {scenarios[currentQuestion].options.map((option, idx) => (
+                    {questions[currentQuestion].options.map((option, idx) => (
                       <button
                         key={idx}
                         onClick={() => handleScenarioAnswer(idx)}

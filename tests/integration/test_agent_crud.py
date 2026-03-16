@@ -75,6 +75,9 @@ class TestAgentCRUD:
             "avatar_image_url": None,
             "default_trust_for_strangers": 0.2,
             "is_mock": False,
+            "domain_modifiers": {},
+            "personality_confidence": 0.7,
+            "questions_answered": 0,
             "status": "active",
         }
 
