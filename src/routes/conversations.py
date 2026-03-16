@@ -69,6 +69,7 @@ def _state_to_response(state: dict) -> ConversationResponse:
         quality_score=state.get("quality_score", 0.0),
         phase_reached=state.get("phase", "OPEN"),
         turn_count=state.get("turn_count", 0),
+        mode=state.get("mode", "socratic"),
     )
 
 
@@ -84,6 +85,7 @@ async def trigger_debate(
         topic=req.topic,
         tenant_id=current_user["tenant_id"],
         background=req.background,
+        mode=req.mode,
     )
     return _state_to_response(state)
 
@@ -121,6 +123,7 @@ async def stream_debate(
             "agent_a": {"id": req.agent_a_id, "name": name_a, "archetype": archetype_a},
             "agent_b": {"id": req.agent_b_id, "name": name_b, "archetype": archetype_b},
             "topic": req.topic,
+            "mode": req.mode,
         })
 
         # Run debate turn-by-turn, streaming each message
@@ -130,6 +133,7 @@ async def stream_debate(
             topic=req.topic,
             tenant_id=current_user["tenant_id"],
             background=req.background,
+            mode=req.mode,
         )
 
         while state["should_continue"] and state["turn_count"] < state["max_turns"]:

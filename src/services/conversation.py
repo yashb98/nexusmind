@@ -1,6 +1,7 @@
 """Socratic conversation engine with optimized parallel I/O routing."""
 
 import asyncio
+import random
 import uuid
 from datetime import UTC, datetime
 
@@ -32,6 +33,93 @@ PHASE_MAP = {
     10: "EXTRACT",
 }
 
+MODE_PHASES = {
+    "socratic": ["OPEN", "PROBE", "DEEPEN", "CHALLENGE", "SYNTHESIZE", "EXTRACT"],
+    "casual": ["CHAT"],
+    "brainstorm": ["SEED", "BUILD", "COMBINE", "REFINE"],
+    "teach": ["INTRODUCE", "EXPLAIN", "CHECK", "DEEPEN", "ASSESS"],
+    "research": ["SCOPE", "DIVIDE", "INVESTIGATE", "SHARE", "SYNTHESIZE"],
+    "play": ["SETUP", "PLAY", "PLAY", "PLAY", "REFLECT"],
+    "project": ["GOAL", "PLAN", "WORK", "REVIEW", "DELIVER"],
+    "reflection": ["PROMPT", "EXPLORE", "PATTERN", "INSIGHT"],
+}
+
+MODE_TURN_LIMITS = {
+    "casual": 20,
+    "socratic": 10,
+    "brainstorm": 15,
+    "teach": 12,
+    "research": 15,
+    "play": 20,
+    "project": 30,
+    "reflection": 10,
+}
+
+MODE_PROMPTS = {
+    "casual": (
+        "Have a natural conversation. Be yourself. No need to debate or challenge. "
+        "Build rapport."
+    ),
+    "socratic": "",  # uses existing phase instructions
+    "brainstorm": (
+        "Build on each other's ideas. Never dismiss. Say 'yes, and...' not 'but'. "
+        "Generate as many ideas as possible. Combine unexpected concepts."
+    ),
+    "teach": (
+        "You are in a teaching conversation. If you have more knowledge on this topic, "
+        "explain clearly using analogies. If learning, ask questions and rephrase in "
+        "your own words."
+    ),
+    "research": (
+        "You're investigating this topic together. Divide the work. Share what you find. "
+        "Synthesize findings. Be systematic."
+    ),
+    "play": (
+        "You're playing a collaborative thinking game. Be creative, spontaneous, and fun. "
+        "Enjoy the interaction."
+    ),
+    "project": (
+        "You're working toward a shared goal. Stay focused on deliverables. Divide tasks. "
+        "Track progress. Be constructive."
+    ),
+    "reflection": (
+        "Think out loud about this topic. Be honest about what you've learned and how your "
+        "thinking has changed. The other agent should listen actively and ask gentle guiding "
+        "questions."
+    ),
+}
+
+
+def select_conversation_mode(trust_level: float, context: dict | None = None) -> str:
+    """Auto-select conversation mode based on context and trust level.
+
+    Args:
+        trust_level: Trust score between 0.0 and 1.0.
+        context: Optional dict with keys like ``user_selected_mode`` or ``event_type``.
+
+    Returns:
+        One of the eight conversation mode strings.
+    """
+    ctx = context or {}
+    if ctx.get("user_selected_mode"):
+        return ctx["user_selected_mode"]
+    if ctx.get("event_type") == "hackathon":
+        return "project"
+    if ctx.get("event_type") == "game_night":
+        return "play"
+    if ctx.get("event_type") == "research_sprint":
+        return "research"
+    if ctx.get("event_type") == "debate_tournament":
+        return "socratic"
+    if trust_level < 0.2:
+        return random.choice(["casual", "play"])
+    if trust_level < 0.4:
+        return random.choice(["casual", "play", "teach", "brainstorm"])
+    return random.choices(
+        ["casual", "socratic", "brainstorm", "teach", "research", "play", "reflection"],
+        weights=[0.2, 0.25, 0.15, 0.15, 0.1, 0.1, 0.05],
+    )[0]
+
 
 async def init_debate_state(
     agent_a_id: str,
@@ -40,9 +128,11 @@ async def init_debate_state(
     tenant_id: str,
     background: bool = False,
     max_turns: int = 10,
+    mode: str = "socratic",
 ) -> ConversationState:
     """Initialize debate state without running turns (for streaming)."""
     conversation_id = str(uuid.uuid4())
+    effective_max = MODE_TURN_LIMITS.get(mode, max_turns)
 
     state: ConversationState = {
         "conversation_id": conversation_id,
@@ -53,7 +143,7 @@ async def init_debate_state(
         "current_speaker": agent_a_id,
         "messages": [],
         "turn_count": 0,
-        "max_turns": max_turns,
+        "max_turns": effective_max,
         "phase": "OPEN",
         "relationship": {},
         "extracted_insights": [],
@@ -62,6 +152,7 @@ async def init_debate_state(
         "quality_score": 0.0,
         "background": background,
         "should_continue": True,
+        "mode": mode,
         "memories": [],
         "permission_ok": True,
         "system_prompt": "",
@@ -85,9 +176,11 @@ async def run_socratic_debate(
     tenant_id: str,
     background: bool = False,
     max_turns: int = 10,
+    mode: str = "socratic",
 ) -> ConversationState:
     """Run a full Socratic debate between two agents."""
     conversation_id = str(uuid.uuid4())
+    effective_max = MODE_TURN_LIMITS.get(mode, max_turns)
 
     state: ConversationState = {
         "conversation_id": conversation_id,
@@ -98,7 +191,7 @@ async def run_socratic_debate(
         "current_speaker": agent_a_id,
         "messages": [],
         "turn_count": 0,
-        "max_turns": max_turns,
+        "max_turns": effective_max,
         "phase": "OPEN",
         "relationship": {},
         "extracted_insights": [],
@@ -107,6 +200,7 @@ async def run_socratic_debate(
         "quality_score": 0.0,
         "background": background,
         "should_continue": True,
+        "mode": mode,
         "memories": [],
         "permission_ok": True,
         "system_prompt": "",
@@ -140,7 +234,14 @@ async def run_socratic_debate(
 async def _run_turn(state: ConversationState) -> ConversationState:
     """Execute a single conversation turn with optimized parallel I/O."""
     state["turn_count"] += 1
-    state["phase"] = PHASE_MAP.get(state["turn_count"], "EXTRACT")
+    mode = state.get("mode", "socratic")
+    if mode == "socratic":
+        state["phase"] = PHASE_MAP.get(state["turn_count"], "EXTRACT")
+    else:
+        phases = MODE_PHASES.get(mode, ["CHAT"])
+        turns_per_phase = max(1, state["max_turns"] // len(phases))
+        phase_index = min(state["turn_count"] // turns_per_phase, len(phases) - 1)
+        state["phase"] = phases[phase_index]
 
     speaker_id = state["current_speaker"]
     other_id = state["agent_b_id"] if speaker_id == state["agent_a_id"] else state["agent_a_id"]
@@ -248,6 +349,11 @@ async def _inject_personality(
         relationship=state["relationship"] or None,
         memories=state["memories"] or None,
     )
+
+    mode = state.get("mode", "socratic")
+    mode_prompt = MODE_PROMPTS.get(mode, "")
+    if mode_prompt:
+        state["system_prompt"] += f"\n\nMODE: {mode.upper()}\n{mode_prompt}"
 
     return state
 
@@ -368,6 +474,7 @@ async def _store_conversation_node(state: ConversationState) -> None:
                summary: $summary,
                quality_score: $quality,
                socratic_depth: $depth,
+               mode: $mode,
                background: $bg
            })
            WITH c
@@ -379,6 +486,7 @@ async def _store_conversation_node(state: ConversationState) -> None:
         summary=summary,
         quality=state["quality_score"],
         depth=state["phase"],
+        mode=state.get("mode", "socratic"),
         bg=state["background"],
         a_id=state["agent_a_id"],
         b_id=state["agent_b_id"],

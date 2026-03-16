@@ -24,7 +24,19 @@ interface ConversationViewerProps {
   messages: Message[];
   insights?: Insight[];
   qualityScore?: number;
+  mode?: string;
 }
+
+const MODE_LABELS: Record<string, { label: string; icon: string }> = {
+  socratic: { label: "Socratic Debate", icon: "\u26A1" },
+  casual: { label: "Casual Chat", icon: "\uD83D\uDCAC" },
+  brainstorm: { label: "Brainstorm", icon: "\uD83D\uDCA1" },
+  teach: { label: "Teach", icon: "\uD83D\uDCDA" },
+  research: { label: "Research", icon: "\uD83D\uDD2C" },
+  play: { label: "Play", icon: "\uD83C\uDFAE" },
+  project: { label: "Project", icon: "\uD83D\uDEE0" },
+  reflection: { label: "Reflection", icon: "\uD83E\uDE9E" },
+};
 
 const PHASE_STYLES: Record<Phase, string> = {
   OPEN: "bg-blue-500/20 text-blue-400 border-blue-500/40",
@@ -117,6 +129,7 @@ export default function ConversationViewer({
   messages,
   insights,
   qualityScore,
+  mode,
 }: ConversationViewerProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -131,7 +144,14 @@ export default function ConversationViewer({
     <div className="flex flex-col gap-4 rounded-lg border border-slate-800 bg-slate-950 p-5">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-slate-100">Conversation</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-semibold text-slate-100">Conversation</h2>
+          {mode && MODE_LABELS[mode] && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-purple-500/40 bg-purple-500/20 px-2.5 py-0.5 text-xs font-medium text-purple-400">
+              {MODE_LABELS[mode].icon} {MODE_LABELS[mode].label}
+            </span>
+          )}
+        </div>
         {qualityScore !== undefined && qualityScore > 0 && (
           <QualityBadge score={qualityScore} />
         )}

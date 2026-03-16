@@ -35,21 +35,35 @@ const TABS = [
 
 // ─── Conversation Picker Modal ───────────────────────────────────────────────
 
+const CONVERSATION_MODES = [
+  { id: "socratic", label: "Socratic Debate", icon: "\u26A1", description: "Structured intellectual debate with phases" },
+  { id: "casual", label: "Casual Chat", icon: "\uD83D\uDCAC", description: "Natural conversation to build trust" },
+  { id: "brainstorm", label: "Brainstorm", icon: "\uD83D\uDCA1", description: "Collaborative idea generation" },
+  { id: "teach", label: "Teach", icon: "\uD83D\uDCDA", description: "One agent explains to another" },
+  { id: "research", label: "Research", icon: "\uD83D\uDD2C", description: "Collaborative investigation" },
+  { id: "play", label: "Play", icon: "\uD83C\uDFAE", description: "Games and fun interactions" },
+  { id: "project", label: "Project", icon: "\uD83D\uDEE0", description: "Goal-oriented collaboration" },
+  { id: "reflection", label: "Reflection", icon: "\uD83E\uDE9E", description: "Thinking out loud with a listener" },
+] as const;
+
+type ConversationMode = typeof CONVERSATION_MODES[number]["id"];
+
 interface PickerProps {
   agents: Record<string, unknown>[];
   myAgentId: string;
-  onStart: (partnerId: string, topic: string) => void;
+  onStart: (partnerId: string, topic: string, mode: ConversationMode) => void;
   onClose: () => void;
 }
 
 function ConversationPicker({ agents, myAgentId, onStart, onClose }: PickerProps) {
   const [selectedPartner, setSelectedPartner] = useState<string | null>(null);
   const [topic, setTopic] = useState("");
+  const [selectedMode, setSelectedMode] = useState<ConversationMode>("socratic");
   const others = agents.filter((a) => a.id !== myAgentId);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-white">Start a Conversation</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-white">
@@ -94,13 +108,36 @@ function ConversationPicker({ agents, myAgentId, onStart, onClose }: PickerProps
           className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-indigo-500 mb-4"
         />
 
+        <div className="mb-4">
+          <label className="text-sm text-gray-400">Conversation Mode</label>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            {CONVERSATION_MODES.map((mode) => (
+              <button
+                key={mode.id}
+                onClick={() => setSelectedMode(mode.id)}
+                className={`rounded-lg border p-2.5 text-left transition-colors ${
+                  selectedMode === mode.id
+                    ? "border-purple-500 bg-purple-900/20"
+                    : "border-gray-700 hover:border-gray-500"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-base">{mode.icon}</span>
+                  <span className="text-sm font-medium text-gray-200">{mode.label}</span>
+                </div>
+                <p className="mt-0.5 text-xs text-gray-500">{mode.description}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+
         <button
-          onClick={() => selectedPartner && topic.trim() && onStart(selectedPartner, topic.trim())}
+          onClick={() => selectedPartner && topic.trim() && onStart(selectedPartner, topic.trim(), selectedMode)}
           disabled={!selectedPartner || !topic.trim()}
           className="w-full flex items-center justify-center gap-2 rounded-lg bg-indigo-600 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <MessageSquare className="h-4 w-4" />
-          Start Debate
+          Start Conversation
         </button>
       </div>
     </div>
@@ -131,7 +168,8 @@ export default function DashboardPage() {
   const [showPicker, setShowPicker] = useState(false);
   const [graphWidth, setGraphWidth] = useState(60); // percentage
   const [isDragging, setIsDragging] = useState(false);
-  const [convMeta, setConvMeta] = useState<{ agent_a: { name: string }; agent_b: { name: string }; topic: string } | null>(null);
+  const [convMode, setConvMode] = useState<string>("socratic");
+  const [convMeta, setConvMeta] = useState<{ agent_a: { name: string }; agent_b: { name: string }; topic: string; mode?: string } | null>(null);
   const [liveMessages, setLiveMessages] = useState<{ id: string; speaker: string; content: string; phase: string; side: "left" | "right" }[]>([]);
   const [convResult, setConvResult] = useState<{ quality_score: number; insights: { content: string; importance: number }[] } | null>(null);
   const [conversationLoading, setConversationLoading] = useState(false);
@@ -213,12 +251,13 @@ export default function DashboardPage() {
 
   // Stream conversation turn-by-turn
   const handleStartConversation = useCallback(
-    (partnerId: string, topic: string) => {
+    (partnerId: string, topic: string, mode: string = "socratic") => {
       if (!myAgentId) return;
       setShowPicker(false);
       setLiveMessages([]);
       setConvMeta(null);
       setConvResult(null);
+      setConvMode(mode);
       setConversationLoading(true);
       setActivePanel("conversation");
 
@@ -226,6 +265,7 @@ export default function DashboardPage() {
         myAgentId,
         partnerId,
         topic,
+        mode,
         // onMeta
         (meta) => {
           setConvMeta(meta as any);
@@ -383,9 +423,15 @@ export default function DashboardPage() {
                     {convMeta && (
                       <div className="mb-3 flex items-center justify-between">
                         <div>
-                          <h2 className="text-sm font-semibold text-slate-200">
-                            {convMeta.agent_a.name} vs {convMeta.agent_b.name}
-                          </h2>
+                          <div className="flex items-center gap-2">
+                            <h2 className="text-sm font-semibold text-slate-200">
+                              {convMeta.agent_a.name} vs {convMeta.agent_b.name}
+                            </h2>
+                            <span className="inline-flex items-center gap-1 rounded-full border border-purple-500/40 bg-purple-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase text-purple-400">
+                              {CONVERSATION_MODES.find((m) => m.id === (convMeta.mode || convMode))?.icon}{" "}
+                              {CONVERSATION_MODES.find((m) => m.id === (convMeta.mode || convMode))?.label || convMode}
+                            </span>
+                          </div>
                           <p className="text-xs text-slate-500">Topic: {convMeta.topic}</p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -414,6 +460,7 @@ export default function DashboardPage() {
                       messages={liveMessages as any}
                       insights={!conversationLoading ? (convInsights as any) : []}
                       qualityScore={convResult?.quality_score}
+                      mode={convMeta?.mode || convMode}
                     />
                   </>
                 )}

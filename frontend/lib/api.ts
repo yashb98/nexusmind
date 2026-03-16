@@ -69,16 +69,17 @@ export const getTrendingTopics = () => api.get("/api/v1/graph/topics/trending");
 export const detectCommunities = () => api.post("/api/v1/graph/communities/detect");
 
 // Conversations
-export const triggerConversation = (agentAId: string, agentBId: string, topic: string) =>
-  api.post("/api/v1/conversations", { agent_a_id: agentAId, agent_b_id: agentBId, topic });
+export const triggerConversation = (agentAId: string, agentBId: string, topic: string, mode: string = "socratic") =>
+  api.post("/api/v1/conversations", { agent_a_id: agentAId, agent_b_id: agentBId, topic, mode });
 export const broadcastConversation = (agentId: string, topic: string) =>
   api.post("/api/v1/conversations/broadcast", { agent_id: agentId, topic });
 
-/** Stream a Socratic debate turn-by-turn via SSE. */
+/** Stream a conversation turn-by-turn via SSE. */
 export function streamConversation(
   agentAId: string,
   agentBId: string,
   topic: string,
+  mode: string = "socratic",
   onMeta: (meta: Record<string, unknown>) => void,
   onTurn: (turn: Record<string, unknown>) => void,
   onDone: (result: Record<string, unknown>) => void,
@@ -90,7 +91,7 @@ export function streamConversation(
   fetch(`${API_URL}/api/v1/conversations/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ agent_a_id: agentAId, agent_b_id: agentBId, topic }),
+    body: JSON.stringify({ agent_a_id: agentAId, agent_b_id: agentBId, topic, mode }),
     signal: controller.signal,
   })
     .then(async (resp) => {

@@ -13,6 +13,7 @@ class ConversationRequest(BaseModel):
     agent_b_id: str
     topic: str = Field(min_length=1, max_length=500)
     background: bool = False
+    mode: str = "socratic"
 
 
 class BroadcastRequest(BaseModel):
@@ -71,6 +72,7 @@ class ConversationResponse(BaseModel):
     quality_score: float
     phase_reached: str
     turn_count: int
+    mode: str = "socratic"
 
 
 class ConversationSummary(BaseModel):
@@ -107,6 +109,7 @@ class ConversationState(TypedDict):
     quality_score: float
     background: bool
     should_continue: bool
+    mode: str  # casual, socratic, brainstorm, teach, research, play, project, reflection
     # Context fetched per turn
     memories: list[str]
     permission_ok: bool
