@@ -38,6 +38,15 @@ DB changes: ADD columns to agents table (default_trust_for_strangers). ADD trust
 Modified: src/services/personality.py, src/services/permission.py, conversation.py finalize node
 Tests: Existing personality tests still pass + new trust modifier tests
 
+### STEP 4.5: DSPy Modules (Structured LLM Optimization)
+Read: .claude/skills/dspy-modules.md
+What: Add DSPy modules for Verification Council, knowledge extraction, Bloom assessment, and quality scoring. Replace raw LLM calls with optimized structured modules. Create 20 labeled examples per module. Run optimization.
+New files: src/dspy_modules/ (verification.py, extraction.py, assessment.py, optimizers.py, data/*.json)
+Modified: src/services/verification.py (swap raw LLM → DSPy), src/services/knowledge.py (swap extraction), src/services/teachback.py (swap Bloom assessment), src/services/conversation.py (swap quality scoring in finalize)
+Install: `uv add dspy`
+Tests: Existing service tests still pass (interfaces unchanged) + new tests for DSPy module accuracy
+IMPORTANT: DSPy is an INTERNAL implementation detail. Service interfaces do NOT change.
+
 ### STEP 5: Embedded Tutor During Conversations
 Read: context/EMBEDDED_TUTOR.md
 What: Tutor runs in parallel panel during live debates. 4 modes: explain/check/reflect/observe.

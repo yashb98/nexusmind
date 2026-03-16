@@ -72,7 +72,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .claude/hooks/block-dangerous.py"
+            "command": "python /Users/yashbishnoi/Downloads/nexusmind/.claude/hooks/block-dangerous.py"
           }
         ]
       }
@@ -82,7 +82,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .claude/hooks/update-scratchpad.py 2>/dev/null || true"
+            "command": "python /Users/yashbishnoi/Downloads/nexusmind/.claude/hooks/update-scratchpad.py 2>/dev/null || true"
           }
         ]
       }

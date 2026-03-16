@@ -56,6 +56,18 @@ New insight enters
 - Thresholds are configurable via env vars (VERIFICATION_SKEPTIC_ACCEPT_THRESHOLD etc.)
 - Each verification costs ~3 LLM calls (~£0.001)
 
+### DSPy Integration
+The Skeptic, Connector, and Judge are implemented as DSPy modules (not raw prompts).
+This guarantees structured output and enables auto-optimization.
+
+Modules in src/dspy_modules/verification.py:
+- SkepticModule: claim, source, counter_evidence, contradictions → reliability_score, reasoning, is_reliable
+- ConnectorModule: claim, related_entities, similar_memories → novelty_score, connections, reasoning
+- JudgeModule: claim, skeptic_score, skeptic_reasoning, connector_score, connector_reasoning → decision, confidence, reasoning
+
+Services call DSPy modules instead of raw LLM calls.
+Optimization: run `python -m src.dspy_modules.optimizers optimize_verification` with 20 labeled examples.
+
 ### Applied To
 1. Every insight extracted from agent conversations
 2. Every web search result before caching in knowledge_base

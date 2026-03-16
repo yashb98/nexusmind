@@ -97,6 +97,9 @@ RULES:
 4. NEVER say "wrong." Guide with questions.
 ```
 
+## Bloom Assessment via DSPy
+The Bloom level assessment (used in both embedded tutor and standalone teach-back) uses a DSPy BloomAssessor module for reliable classification. This is NOT in the tutor generation — the tutor prompt is still hand-written for natural conversation. Only the ASSESSMENT of the learner's response uses DSPy.
+
 ## Learner Response Handling
 
 ```python

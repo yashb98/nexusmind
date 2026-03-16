@@ -25,6 +25,7 @@
 - Embedded tutor: generates commentary after each debate turn (non-background)
 - 5 mock agents auto-connect to new users with domain_modifiers + taglines
 - Social layer: groups, events, feed, discovery
+- DSPy modules: verification council, knowledge extraction, Bloom assessment, quality scoring
 - Navigation: Home, Network, Groups, Events, Learn, Profile
 
 ## Discoveries

@@ -11,6 +11,7 @@ NexusMind is a self-learning collective intelligence platform. Personality-drive
 - **LLM Inference:** LiteLLM gateway → RunPod Serverless vLLM (primary) → Anthropic API (fallback)
 - **LLM Model:** Qwen 2.5 7B Instruct (4-bit) via RunPod Serverless (OpenAI-compatible)
 - **Fine-Tuning:** MLX LoRA/QLoRA on Mac Studio (later) OR RunPod A10G burst (now)
+- **Structured LLM Output:** DSPy (auto-optimized modules for verification, extraction, assessment, scoring)
 - **Agent Orchestration:** LangGraph (stateful multi-agent conversations, Socratic protocol, verification)
 - **Background Scheduler:** APScheduler + asyncio (always-on agent work loops)
 - **Graph DB:** Neo4j (social graph, communities, knowledge entities, verification trail)
@@ -159,6 +160,7 @@ uv run python scripts/seed_demo.py
 - Facts go to MEMORY (searchable). Patterns go to WEIGHTS (LoRA). Always separated.
 - When unsure: read SPEC.md, ARCHITECTURE.md, LAYERS.md, EVOLUTION.md
 - When making decisions: append to DECISIONS.md
+- DSPy modules used ONLY for structured output tasks (verification, extraction, assessment, scoring). Agent conversations, tutor, and personality prompts are HAND-WRITTEN — never DSPy.
 
 ## Build Order
 Complete ALL tasks in current phase before moving to next.

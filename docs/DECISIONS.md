@@ -78,3 +78,9 @@
 **Decision:** 5 pre-built mock agents with diverse personalities auto-connect to every new user at trust=0.2. Real human connections are established via invite links + connection requests. All new relationships start at trust=0.2 (Stranger level).
 **Rationale:** An empty graph is a dead product. New users need to see their agent on a living network immediately. Trust-based connection model mirrors how real human relationships develop — you don't grant full access to someone you just met.
 **Consequences:** New connection_requests table in Postgres. Mock agents need periodic maintenance (personality updates, interest refresh). 5 extra KNOWS edges created per new user signup. Seed script must create mock agents with is_mock=true flag.
+
+## ADR-016: DSPy for Structured LLM Output (4 Modules Only)
+**Date:** 2026-03-16
+**Decision:** Use DSPy modules for 4 specific LLM call sites that require structured, reliable output: Verification Council (Skeptic/Connector/Judge), Knowledge Extraction (insights + entities), Bloom Level Assessment, and Conversation Quality Scoring. All other LLM calls (personality prompts, tutor, conversation generation) remain hand-written.
+**Rationale:** Hand-written prompts for structured output are fragile — score formats break, entity types are inconsistent, classification reliability varies by model. DSPy guarantees output structure and auto-optimizes prompts when switching models. However, DSPy is wrong for creative/conversational output where personality expression and natural language matter more than structure. The 4 chosen sites are pure classification/extraction tasks where structure > creativity.
+**Consequences:** New dependency (dspy). 7 DSPy modules in src/dspy_modules/. 20 labeled examples per module (80 total). Re-optimization needed when switching LLM backends (~10 min per module). Service interfaces unchanged — DSPy is an internal implementation detail.

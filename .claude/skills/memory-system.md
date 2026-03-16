@@ -74,6 +74,12 @@ After each conversation, extract:
 - Each relation has: confidence, source_conversation_id, discovered_at
 - Store in Neo4j, embed in Qdrant hot collection
 
+Entity extraction uses DSPy modules for reliable structured output:
+- `InsightExtractor` → insights with importance scores and bloom_relevance
+- `EntityRelationExtractor` → entities with typed relations (CAUSES, CONTRADICTS, SUPPORTS)
+Modules in src/dspy_modules/extraction.py. Optimized on 20 labeled examples.
+This replaces raw LLM prompt calls but does NOT change what gets stored in Neo4j/Qdrant.
+
 ### Rules
 - EVERY retrieval MUST filter by tenant_id
 - EVERY retrieval MUST check permission_level

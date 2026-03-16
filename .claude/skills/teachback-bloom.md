@@ -36,9 +36,16 @@ Avatar generated asynchronously (text first, video follows).
 3. Right answer → acknowledge specifically, then increase difficulty.
 4. 1-3 sentences per tutor turn. ONE question per turn.
 
-## Bloom Assessment
-LLM-as-judge reads conversation, scores demonstrated level.
-UPDATE learner_knowledge: use GREATEST(current, new) to never decrease.
+## Bloom Assessment (DSPy Module)
+Bloom level assessment uses a DSPy module for reliable classification.
+Module: `src/dspy_modules/assessment.py → BloomAssessor`
+
+Input: topic, tutor_question, learner_response, current_bloom_level
+Output: demonstrated_level (1-6), confidence, reasoning, misconceptions
+
+Called from TeachBackService and embedded tutor's handle_tutor_response().
+Optimized on 20 labeled exchange→level examples.
+Output validated: level clamped to 1-6, confidence to 0-1.
 
 ## Avatar Pipeline
 Text → Edge TTS (free, <500ms) → SadTalker (RunPod T4, 3-5s) → video URL.

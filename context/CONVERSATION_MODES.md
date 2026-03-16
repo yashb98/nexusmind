@@ -251,3 +251,10 @@ state["phase"] = phases[phase_index]
 - Conversation viewer shows mode badge alongside phase badge
 - All modes produce insights (via extract step), but quality/depth varies
 - PLAY mode conversations build trust faster (+0.08 per good game vs +0.05 for debate)
+
+## DSPy Integration Notes
+Conversation generation (agent turns) does NOT use DSPy — prompts are hand-written with triple-layer personality.
+Two post-conversation operations use DSPy:
+- Knowledge extraction (after EXTRACT phase): DSPy InsightExtractor + EntityRelationExtractor in src/dspy_modules/extraction.py
+- Quality scoring (in finalize node): DSPy QualityJudge in src/dspy_modules/assessment.py
+These are imported into conversation.py but don't affect the conversation flow itself.

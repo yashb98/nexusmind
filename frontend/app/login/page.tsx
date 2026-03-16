@@ -28,8 +28,14 @@ export default function LoginPage() {
       setToken(resp.data.access_token);
       router.push(isRegister ? "/onboarding" : "/dashboard");
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(msg || "Authentication failed");
+      const axErr = err as { response?: { status?: number; data?: { detail?: string } } };
+      const status = axErr?.response?.status;
+      const msg = axErr?.response?.data?.detail;
+      if (status === 409) {
+        setError("This email is already registered. Try signing in instead.");
+      } else {
+        setError(msg || "Authentication failed");
+      }
     } finally {
       setLoading(false);
     }

@@ -107,7 +107,24 @@ def embed_batch(texts: list[str]) -> list[list[float]]:
     return model.encode(texts).tolist()
 ```
 
-## Prompt Templates
+## DSPy Modules (Structured Output)
+4 LLM call sites use DSPy instead of raw prompts for reliable structured output:
+
+| Module | Location | Input → Output |
+|--------|----------|----------------|
+| SkepticModule | dspy_modules/verification.py | claim, evidence → score, reasoning |
+| ConnectorModule | dspy_modules/verification.py | claim, graph context → novelty, connections |
+| JudgeModule | dspy_modules/verification.py | scores, reasoning → decision |
+| InsightExtractor | dspy_modules/extraction.py | transcript → insights[], entities[] |
+| EntityRelationExtractor | dspy_modules/extraction.py | text → entities[], relations[] |
+| BloomAssessor | dspy_modules/assessment.py | exchange → level (1-6), reasoning |
+| QualityJudge | dspy_modules/assessment.py | transcript → multi-dim scores |
+
+DSPy uses the SAME LiteLLM backend (RunPod primary → Anthropic fallback).
+Temperature 0.3 for DSPy (deterministic), 0.7 for conversations (creative).
+ALL DSPy calls still wrapped in Langfuse traces.
+
+## Prompt Templates (Hand-Written — NOT DSPy)
 All prompts stored in `src/llm/prompts.py` as string constants with `{placeholder}` format.
 
 Key templates:

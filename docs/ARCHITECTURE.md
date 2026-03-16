@@ -531,6 +531,22 @@ EMBEDDING = {
 }
 ```
 
+## 5.5 DSPy Modules (Structured LLM Output)
+
+4 LLM call sites use DSPy for auto-optimized structured output:
+
+- SkepticModule: claim, source, evidence, contradictions → reliability_score(float), reasoning(str), is_reliable(bool)
+- ConnectorModule: claim, entities, memories → novelty_score(float), connections(list), reasoning(str)
+- JudgeModule: claim, skeptic_result, connector_result → decision(str), confidence(float), reasoning(str)
+- InsightExtractor: transcript, topic → insights(list), entities(list), unresolved(list), quality(float)
+- EntityRelationExtractor: text → entities(list), relations(list)
+- BloomAssessor: topic, question, response, current_level → demonstrated_level(int 1-6), confidence(float), reasoning(str)
+- QualityJudge: transcript, mode, personalities → overall(float), personality_consistency(float), depth(float), knowledge(float)
+
+DSPy configuration uses same LLM as conversations but with temperature=0.3 (more deterministic).
+Optimization: 20 labeled examples per module → BootstrapFewShot → saved to src/dspy_modules/optimized/.
+Integration: DSPy modules replace raw LLM calls inside services. Service return types unchanged.
+
 ## 6. Prompt Templates
 
 ### Personality Prompt (Agent Conversations — Trust-Adjusted)

@@ -53,3 +53,13 @@ After each conversation: quality>3.5→+0.05, verified insights→+0.03, constru
 
 ## Embedded Tutor (non-background only)
 After each agent turn, tutor generates commentary in parallel WebSocket channel. Modes: explain/check/reflect/observe. Does NOT block debate.
+
+## DSPy Usage (Limited)
+Conversations do NOT use DSPy. Personality prompts are hand-written and triple-layered (base × domain × trust). DSPy would fight the personality system.
+
+Two POST-conversation operations DO use DSPy:
+- **Knowledge extraction** (extract_knowledge node): DSPy InsightExtractor + EntityRelationExtractor
+- **Quality scoring** (finalize node): DSPy QualityJudge
+
+These are structured output tasks where reliability matters more than creativity.
+Modules in src/dspy_modules/extraction.py and src/dspy_modules/assessment.py.

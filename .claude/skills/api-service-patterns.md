@@ -131,6 +131,26 @@ async def test_personality_consistency():
     # Assert variance < 0.5
 ```
 
+## DSPy Module Integration Pattern
+When a service uses a DSPy module, the integration follows this pattern:
+```python
+class VerificationService:
+    def __init__(self, ..., skeptic_module: SkepticModule):
+        self.skeptic = skeptic_module
+
+    async def run_skeptic(self, insight, context) -> SkepticResult:
+        result = self.skeptic(claim=insight.content, source=context.source_description, ...)
+        return SkepticResult(
+            score=max(0.0, min(1.0, result.reliability_score)),
+            reasoning=result.reasoning,
+        )
+```
+Rules:
+- DSPy modules injected via dependency injection (testable, swappable)
+- Service return types NEVER change when swapping to DSPy
+- ALWAYS validate/clamp DSPy outputs before returning
+- DSPy modules are synchronous — use `asyncio.to_thread()` if blocking
+
 ## Code Style
 - async def for ALL handlers and service methods
 - Type hints on every function (mypy strict)
