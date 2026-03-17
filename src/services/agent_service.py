@@ -1,5 +1,6 @@
 """Agent CRUD service with Postgres + Neo4j sync."""
 
+import json
 import uuid
 
 import structlog
@@ -30,7 +31,7 @@ def _row_to_response(row: dict) -> AgentResponse:
         default_trust_for_strangers=row.get("default_trust_for_strangers", 0.2),
         is_mock=row.get("is_mock", False),
         tagline=row.get("tagline"),
-        domain_modifiers=row.get("domain_modifiers", {}),
+        domain_modifiers=json.loads(row["domain_modifiers"]) if isinstance(row.get("domain_modifiers"), str) else (row.get("domain_modifiers") or {}),
         personality_confidence=row.get("personality_confidence", 0.7),
         questions_answered=row.get("questions_answered", 0),
         tutor_voice=row.get("tutor_voice", "en-GB-SoniaNeural"),
@@ -72,13 +73,15 @@ async def create_agent(req: AgentCreate, user_id: str, tenant_id: str) -> AgentR
         req.default_trust_for_strangers,
         req.is_mock,
         req.tagline,
-        req.domain_modifiers,
+        json.dumps(req.domain_modifiers or {}),
         req.personality_confidence,
         req.questions_answered,
         req.tutor_voice,
         req.tutor_avatar_url,
         req.tutor_mode_preference,
     )
+
+    logger.info("agent_row_inserted", agent_id=str(agent_id), cols=list(dict(row).keys()) if row else "None")
 
     await _sync_agent_to_neo4j(row)
 

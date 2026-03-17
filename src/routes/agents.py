@@ -14,7 +14,14 @@ async def create_agent(
     req: AgentCreate, current_user: dict = Depends(get_current_user)
 ) -> AgentResponse:
     """Create a new agent."""
-    return await agent_service.create_agent(req, current_user["user_id"], current_user["tenant_id"])
+    import structlog
+    log = structlog.get_logger("agents.route")
+    try:
+        result = await agent_service.create_agent(req, current_user["user_id"], current_user["tenant_id"])
+        return result
+    except Exception as e:
+        log.error("agent_creation_failed", error=str(e), error_type=type(e).__name__)
+        raise
 
 
 @router.get("", response_model=list[AgentResponse])
